@@ -54,10 +54,10 @@ function App() {
   };
 
   if (user) return <Tracker onSignOut={() => { reset(); setError(null); }} />;
-  return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-    <main className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-      <h1 className="text-4xl font-bold text-gray-900 mb-2">Habit Tracker</h1>
-      <p className="text-gray-600 mb-8">Track your daily habits and build better routines</p>
+  return <div className="login-page">
+    <main className="login-panel">
+      <h1 className="login-title">Fero Tracker</h1>
+      <p className="login-description">Návyky aj tréning. Tvoj každodenný prehľad.</p>
       {error && <p role="alert" className="mb-4 text-sm text-red-700">{error}</p>}
       <GoogleButton onLogin={() => void handleLogin()} busy={connecting} />
       {connecting && <>
@@ -66,7 +66,7 @@ function App() {
           Cancel
         </button>
       </>}
-      <p className="mt-6 text-sm text-gray-500">Your habits are saved in your own Google Sheet.</p>
+      <p className="login-footnote">Tvoje dáta zostávajú v tvojich Google tabuľkách.</p>
     </main>
   </div>;
 }

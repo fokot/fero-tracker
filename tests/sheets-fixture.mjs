@@ -38,6 +38,17 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       const {sheetId,dimension,length}=request.appendDimension;
       const target=get(state,sheetId);
       target.properties.gridProperties[dimension==='COLUMNS'?'columnCount':'rowCount']+=length;
+    } else if(request.deleteDimension) {
+      const {sheetId,dimension,startIndex,endIndex}=request.deleteDimension.range;
+      const target=get(state,sheetId), count=endIndex-startIndex;
+      assert.ok(count > 0 && startIndex >= 0);
+      if(dimension==='COLUMNS') {
+        for(const row of target.rows) row.splice(startIndex,count);
+        target.properties.gridProperties.columnCount-=count;
+      } else {
+        target.rows.splice(startIndex,count);
+        target.properties.gridProperties.rowCount-=count;
+      }
     } else if(request.updateSheetProperties) {
       const props=request.updateSheetProperties.properties;
       Object.assign(get(state,props.sheetId).properties.gridProperties,props.gridProperties);

@@ -97,3 +97,25 @@ test('a habits spreadsheet can never be rewritten as workouts by mistake', async
   await assert.rejects(env.sheets.saveWorkoutSets('sheet-1', '2026-10-25', 'Bench press', sets), /chýba list Workouts/);
   assert.equal(env.calls.filter((call) => call.method === 'POST').length, 0);
 });
+test('renaming a workout changes only its header and keeps every day and every set', async () => {
+  const env=setup({rows:[['Date','Bench press','Drep'],['2026-10-25','5×100','5×80'],['2026-10-26','3×120','6×90']]});
+  assert.equal(await env.sheets.renameWorkoutExercise('sheet-1','Bench press',' Tlaky '),'Tlaky');
+  assert.deepEqual(env.rows,[['Date','Tlaky','Drep'],['2026-10-25','5×100','5×80'],['2026-10-26','3×120','6×90']]);
+  await env.sheets.saveWorkoutSets('sheet-1','2026-10-25','Tlaky',[]);
+  assert.deepEqual(env.rows,[['Date','Tlaky','Drep'],['2026-10-25','','5×80'],['2026-10-26','3×120','6×90']]);
+});
+test('invalid, duplicate, missing and failed workout renames never merge or discard history', async () => {
+  const env=setup({rows:[['Date','Bench press','Drep'],['2026-10-25','5×100','5×80']]});
+  const original=plain(env.rows);
+  for(const name of ['','x'.repeat(101),' dREP ']) await assert.rejects(env.sheets.renameWorkoutExercise('sheet-1','Bench press',name));
+  await assert.rejects(env.sheets.renameWorkoutExercise('sheet-1','missing','New'));
+  assert.deepEqual(env.rows,original);
+  const failed=setup({failBatch:true});
+  await assert.rejects(failed.sheets.renameWorkoutExercise('sheet-1','Bench press','Tlaky'),/batch failure/);
+  assert.deepEqual(failed.rows,[['Date','Bench press','Drep']]);
+});
+test('renaming only letter case works without creating a second exercise column', async () => {
+  const env=setup();
+  await env.sheets.renameWorkoutExercise('sheet-1','Bench press','BENCH PRESS');
+  assert.deepEqual(env.rows,[['Date','BENCH PRESS','Drep']]);
+});

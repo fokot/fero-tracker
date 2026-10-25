@@ -1,26 +1,49 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useHabitStore } from '../store/useHabitStore';
 import { dateKey, visibleDates } from '../lib/dates';
 import type { HabitType } from '../lib/types';
 import { Modal } from './Modal';
+import { Icon } from './Icon';
+import { EditableName } from './EditableName';
+import { ManageItemModal } from './ManageItemModal';
 
 export function HabitGrid() {
   const { habits, habitValues, toggleHabit, setNumericValue, spreadsheetId,
-    loadHabitsAndValues, addHabit, isLoading, hasLoaded, pendingWrites, error } = useHabitStore();
+    loadHabitsAndValues, addHabit, renameHabit, deleteHabit, isLoading, hasLoaded, pendingWrites, error } = useHabitStore();
   const [today, setToday] = useState(() => dateKey(new Date()));
   const dates = useMemo(() => {
     const [year, month, day] = today.split('-').map(Number);
     return visibleDates(new Date(year, month - 1, day, 12));
   }, [today]);
+  const calendar = useRef<HTMLDivElement>(null);
+  const initialScroll = useRef(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<HabitType>('boolean');
   const [editing, setEditing] = useState<{ name: string; date: string } | null>(null);
   const [number, setNumber] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const managingHabit = habits.find((habit) => habit.id === managingId);
   const syncing = isLoading || pendingWrites > 0;
   const busy = syncing || !hasLoaded;
+  const completed = habits.filter((habit) => !!habitValues[today]?.[habit.name]).length;
+  const status = isLoading ? 'Načítavam…' : pendingWrites ? 'Ukladám…' : error ? 'Zápis zlyhal' : hasLoaded ? 'Uložené' : 'Pripájam…';
 
+  const showToday = (smooth = false) => {
+    const element = calendar.current;
+    const cell = element?.querySelector<HTMLElement>('[aria-current="date"]');
+    if (!element || !cell) return;
+    const nameColumn = element.querySelector<HTMLElement>('.habit-name');
+    const width = cell.getBoundingClientRect().width;
+    const left = element.scrollLeft + cell.getBoundingClientRect().left - element.getBoundingClientRect().left;
+    element.scrollTo({ left: Math.max(0, left - (nameColumn?.offsetWidth ?? 112) - width * 2), behavior: smooth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'instant' });
+  };
+  const goToToday = () => {
+    const currentDate = dateKey(new Date());
+    if (currentDate !== today) setToday(currentDate);
+    else showToday(true);
+  };
   useEffect(() => {
     const update = () => setToday(dateKey(new Date()));
     const timer = setInterval(update, 30000);
@@ -28,97 +51,97 @@ export function HabitGrid() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', update); };
   }, []);
   useEffect(() => {
+    initialScroll.current = false;
     if (spreadsheetId) void loadHabitsAndValues(dates[0], dates[dates.length - 1]);
   }, [spreadsheetId, dates, loadHabitsAndValues]);
+  useEffect(() => {
+    if (habits.length && !initialScroll.current) { showToday(); initialScroll.current = true; }
+  }, [habits.length, today]);
 
-  const close = () => { if (!pendingWrites) { setAdding(false); setEditing(null); setFormError(null); } };
+  const close = () => { if (!useHabitStore.getState().pendingWrites) { setAdding(false); setEditing(null); setManagingId(null); setFormError(null); } };
   const submitHabit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
     setFormError(null);
     if (await addHabit(name, type)) { setAdding(false); setName(''); setType('boolean'); }
-    else setFormError(useHabitStore.getState().error ?? 'Could not save this habit. Please retry.');
+    else setFormError(useHabitStore.getState().error ?? 'Návyk sa nepodarilo uložiť. Skús to znova.');
   };
   const submitNumber = async (event: FormEvent) => {
     event.preventDefault();
     if (!editing || busy) return;
     setFormError(null);
     if (await setNumericValue(editing.name, editing.date, number)) setEditing(null);
-    else setFormError(useHabitStore.getState().error ?? 'Could not save this value. Please retry.');
+    else setFormError(useHabitStore.getState().error ?? 'Hodnotu sa nepodarilo uložiť. Skús to znova.');
   };
 
-  return <div className="min-h-screen bg-gray-50 pb-24">
-    <main className="max-w-7xl mx-auto px-4 py-4">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">My Habits</h1>
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-4 text-sm">
-        <p role="status" aria-live="polite" className={error ? 'text-red-700' : 'text-gray-600'}>
-          {isLoading ? 'Loading habits…' : pendingWrites ? 'Saving…' : error ? 'Changes could not be synced.' : hasLoaded ? 'All changes saved' : 'Waiting to load habits…'}
-        </p>
-        <div className="flex gap-4">
-          {spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="text-indigo-700 underline">Open Google Sheet</a>}
-          <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1])} className="text-indigo-700 underline disabled:opacity-50">Refresh</button>
-        </div>
+  return <main id="main-content" className="habits-page">
+    <div className="page-heading">
+      <div><h1>Návyky</h1><p className="page-description">Malé kroky. Každý deň.</p></div>
+      <button className="primary-button heading-action" onClick={() => { setAdding(true); setFormError(null); }} disabled={busy} aria-label="Add habit"><Icon name="plus" size={19} /><span>Pridať návyk</span></button>
+    </div>
+    <div className="habit-summary">
+      <p><strong>{completed}<span>/{habits.length}</span></strong><span> dnes zaznamenané</span></p>
+      <span role="status" aria-live="polite" className={`sync-status ${error ? 'has-error' : ''}`}><span className={`status-dot ${syncing ? 'is-pending' : ''}`} />{status}</span>
+    </div>
+    <div className="calendar-toolbar">
+      <div className="calendar-period"><strong>{dates[30].toLocaleDateString('sk-SK', { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title="Prejsť na dnešný dátum"><Icon name="today" size={17} />Dnes</button></div>
+      <div className="toolbar-actions">
+        {spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Open Google Sheet" title="Otvoriť Google Sheet"><Icon name="external" size={18} /></a>}
+        <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1])} className="icon-button" aria-label="Refresh" title="Obnoviť"><Icon name="refresh" size={18} /></button>
       </div>
-      {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {!habits.length ? <p className="text-center text-gray-500 py-12">{hasLoaded ? 'No habits yet. Add one to get started!' : error ? 'Refresh to retry loading your habits.' : 'Loading habits…'}</p> :
-        <div className="overflow-x-auto rounded-lg border bg-white" tabIndex={0} aria-label="Habit calendar, scroll horizontally for more dates">
-          <table className="border-collapse text-sm">
-            <caption className="sr-only">Daily habits, from {dateKey(dates[0])} to {dateKey(dates[dates.length - 1])}</caption>
-            <thead><tr>
-              <th scope="col" className="sticky left-0 z-20 bg-gray-50 min-w-[144px] max-w-[192px] p-3 text-left border-r">Habit</th>
-              {dates.map((date) => { const key = dateKey(date); return <th key={key} scope="col" aria-current={key === today ? 'date' : undefined}
-                className={`min-w-[56px] p-2 border-r text-center ${key === today ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-50'}`}>
-                <time dateTime={key}><span className="block text-xs font-normal">{date.toLocaleDateString(undefined, { month: 'short' })}</span>{date.getDate()}</time>
-              </th>; })}
-            </tr></thead>
-            <tbody>{habits.map((habit) => <tr key={habit.id} className="border-t">
-              <th scope="row" className="sticky left-0 z-10 bg-gray-50 p-3 border-r text-left break-words min-w-[144px] max-w-[192px]">{habit.name}</th>
-              {dates.map((date) => {
-                const key = dateKey(date), value = habitValues[key]?.[habit.name] ?? '';
-                return <td key={key} className={`border-r p-0 text-center ${key === today ? 'bg-indigo-50' : ''}`}>
-                  <button disabled={busy} aria-label={`${habit.name}, ${key}: ${value || 'empty'}`}
-                    aria-pressed={habit.type === 'boolean' ? value === '✓' : undefined}
-                    onClick={() => {
-                      if (habit.type === 'boolean') void toggleHabit(habit.name, key);
-                      else { setEditing({ name: habit.name, date: key }); setNumber(value); setFormError(null); }
-                    }}
-                    className={`w-full min-w-[56px] h-12 px-1 hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-50 ${value === '✓' ? 'bg-green-100 text-green-800 font-bold' : value ? 'text-blue-800 font-medium' : 'text-gray-400'}`}>
-                    {value || '—'}
-                  </button>
-                </td>;
-              })}
-            </tr>)}</tbody>
-          </table>
-        </div>}
-    </main>
-    <button onClick={() => { setAdding(true); setFormError(null); }} disabled={busy} aria-label="Add habit"
-      className="fixed bottom-4 right-4 w-14 h-14 bg-indigo-600 text-white text-3xl rounded-full shadow-lg hover:bg-indigo-700 disabled:opacity-50">+</button>
-    {adding && <Modal title="Add New Habit" onClose={close}>
+    </div>
+    {error && <p role="alert" className="error-banner">{error}</p>}
+    {!habits.length ? <div className="empty-state"><Icon name="habits" size={32} /><h2>{hasLoaded ? 'Začni jedným návykom' : error ? 'Skús obnoviť svoje návyky' : 'Načítavam návyky…'}</h2>{hasLoaded && <p>Pridaj to, čomu chceš venovať čas každý deň.</p>}</div> :
+      <div ref={calendar} className="habit-calendar" tabIndex={0} aria-label="Habit calendar, scroll horizontally for more dates">
+        <table className="habit-table">
+          <caption className="sr-only">Daily habits, from {dateKey(dates[0])} to {dateKey(dates[dates.length - 1])}</caption>
+          <thead><tr>
+            <th scope="col" className="habit-name habit-corner">Tvoje návyky</th>
+            {dates.map((date) => { const key = dateKey(date); return <th key={key} scope="col" aria-current={key === today ? 'date' : undefined} className={`habit-date ${key === today ? 'is-today' : ''}`}>
+              <time dateTime={key}><span>{date.toLocaleDateString('sk-SK', { weekday: 'short' }).replace('.', '')}</span><strong>{date.getDate()}</strong></time>
+            </th>; })}
+          </tr></thead>
+          <tbody>{habits.map((habit) => <tr key={habit.id}>
+            <th scope="row" className="habit-name"><EditableName name={habit.name} kind="návyk" disabled={busy} onOpen={() => setManagingId(habit.id)} /></th>
+            {dates.map((date) => {
+              const key = dateKey(date), value = habitValues[key]?.[habit.name] ?? '';
+              return <td key={key} className={key === today ? 'is-today' : ''}>
+                <button disabled={busy} aria-label={`${habit.name}, ${key}: ${value || 'empty'}`} aria-pressed={habit.type === 'boolean' ? value === '✓' : undefined}
+                  onClick={() => {
+                    if (habit.type === 'boolean') void toggleHabit(habit.name, key);
+                    else { setEditing({ name: habit.name, date: key }); setNumber(value); setFormError(null); }
+                  }} className={`habit-cell ${value === '✓' ? 'is-checked' : value ? 'has-value' : ''}`}>
+                  {value === '✓' ? <Icon name="check" size={19} /> : value || <span className="empty-mark">·</span>}
+                </button>
+              </td>;
+            })}
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    {!!habits.length && <p className="calendar-hint">Posunutím do strán zobrazíš ďalšie dni. <span className="edit-hint-touch">Podrž názov návyku pre úpravu.</span><span className="edit-hint-mouse">Klikni na názov návyku pre úpravu.</span></p>}
+    {managingHabit && <ManageItemModal name={managingHabit.name} kind="návyk" busy={syncing} onClose={close}
+      renameHelp="Nový názov sa použije vo všetkých dňoch. Záznamy zostanú zachované."
+      deleteHelp="Vymaže sa tento návyk aj všetky jeho záznamy zo všetkých dní. Ostatné návyky zostanú zachované." deleteLabel="Vymazať návyk"
+      onRename={async (nextName) => { if (!await renameHabit(managingHabit.id, nextName)) throw new Error(useHabitStore.getState().error ?? 'Návyk sa nepodarilo premenovať.'); }}
+      onDelete={async () => { if (!await deleteHabit(managingHabit.id)) throw new Error(useHabitStore.getState().error ?? 'Návyk sa nepodarilo vymazať.'); }} />}
+    {adding && <Modal title="Pridať návyk" onClose={close}>
       <form onSubmit={(event) => void submitHabit(event)}>
-        <label htmlFor="habit-name" className="block text-sm font-medium mb-1">Habit name</label>
-        <input id="habit-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoFocus disabled={busy}
-          className="w-full border rounded-lg px-3 py-2 mb-4" placeholder="e.g., Morning Run" />
-        <label htmlFor="habit-type" className="block text-sm font-medium mb-1">Habit type</label>
-        <select id="habit-type" value={type} onChange={(event) => setType(event.target.value as HabitType)} disabled={busy} className="w-full border rounded-lg px-3 py-2">
-          <option value="boolean">Checkmark (✓)</option><option value="numeric">Number</option>
-        </select>
-        {formError && <p role="alert" className="mt-3 text-sm text-red-700">{formError}</p>}
-        <div className="flex gap-3 justify-end mt-6">
-          <button type="button" onClick={close} disabled={busy} className="px-4 py-2 rounded-lg disabled:opacity-50">Cancel</button>
-          <button disabled={busy || !name.trim()} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50">{pendingWrites ? 'Saving…' : 'Add Habit'}</button>
-        </div>
+        <label htmlFor="habit-name" className="field-label">Názov návyku</label>
+        <input id="habit-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoFocus disabled={busy} className="form-input" placeholder="Napr. Ranná prechádzka" />
+        <label htmlFor="habit-type" className="field-label">Typ návyku</label>
+        <select id="habit-type" value={type} onChange={(event) => setType(event.target.value as HabitType)} disabled={busy} className="form-input"><option value="boolean">Zaškrtnutie</option><option value="numeric">Číslo</option></select>
+        {formError && <p role="alert" className="form-error">{formError}</p>}
+        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">Zrušiť</button><button disabled={busy || !name.trim()} className="primary-button">{pendingWrites ? 'Ukladám…' : 'Pridať návyk'}</button></div>
       </form>
     </Modal>}
-    {editing && <Modal title={`${editing.name} · ${editing.date}`} onClose={close}>
+    {editing && <Modal title={editing.name} onClose={close}>
       <form onSubmit={(event) => void submitNumber(event)}>
-        <label htmlFor="habit-value" className="block text-sm font-medium mb-1">Value (leave empty to clear)</label>
-        <input id="habit-value" type="number" step="any" autoFocus value={number} onChange={(event) => setNumber(event.target.value)} disabled={busy} className="w-full border rounded-lg px-3 py-2" />
-        {formError && <p role="alert" className="mt-3 text-sm text-red-700">{formError}</p>}
-        <div className="flex gap-3 justify-end mt-6">
-          <button type="button" onClick={close} disabled={busy} className="px-4 py-2 rounded-lg disabled:opacity-50">Cancel</button>
-          <button disabled={busy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50">{pendingWrites ? 'Saving…' : 'Save'}</button>
-        </div>
+        <p className="form-context">{editing.date}</p><label htmlFor="habit-value" className="field-label">Hodnota</label>
+        <input id="habit-value" type="number" inputMode="decimal" step="any" autoFocus value={number} onChange={(event) => setNumber(event.target.value)} disabled={busy} className="form-input" />
+        <p className="field-help">Prázdne pole vymaže uloženú hodnotu.</p>
+        {formError && <p role="alert" className="form-error">{formError}</p>}
+        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">Zrušiť</button><button disabled={busy} className="primary-button">{pendingWrites ? 'Ukladám…' : 'Uložiť'}</button></div>
       </form>
     </Modal>}
-  </div>;
+  </main>;
 }

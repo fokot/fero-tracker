@@ -5,7 +5,7 @@ import { createLoader, deferred, plain } from './load-module.mjs';
 const user = { id: 'one', email: 'test@example.com' };
 const habit = { id: 'run', name: 'Run', type: 'boolean' };
 function setup(overrides = {}) {
-  const api = { loadHabitData: async () => ({ habits: [habit], values: [] }), saveHabit: async () => {}, writeHabitValue: async () => {}, ...overrides };
+  const api = { loadHabitData: async () => ({ habits: [habit], values: [] }), saveHabit: async () => {}, writeHabitValue: async () => {}, renameHabit: async (id,habitId,name)=>({...habit,id:habitId,name:name.trim()}), deleteHabit:async()=>{}, ...overrides };
   const { useHabitStore: store } = createLoader({ mocks: { '../lib/googleSheets': api } })('src/store/useHabitStore.ts');
   store.getState().setSession(user, 'sheet-1');
   store.setState({ hasLoaded: true });
@@ -103,4 +103,45 @@ test('special habit names remain ordinary data keys', async () => {
   store.setState({ habits: [{ ...habit, name: '__proto__' }] });
   assert.equal(await store.getState().toggleHabit('__proto__', '2026-10-25'), true);
   assert.equal(store.getState().habitValues['2026-10-25']['__proto__'], '✓');
+});
+test('rename and delete move only the chosen habit values and preserve zero, blanks and other dates', async () => {
+  const store=setup();
+  store.setState({habits:[habit,{id:'read',name:'Read',type:'numeric'}],habitValues:{'2026-10-25':{Run:'✓',Read:'0'},'2026-10-26':{Run:'',Read:'24'}}});
+  assert.equal(await store.getState().renameHabit('run','__proto__'),true);
+  assert.deepEqual(plain(store.getState().habitValues),{'2026-10-25':{['__proto__']:'✓',Read:'0'},'2026-10-26':{['__proto__']:'',Read:'24'}});
+  assert.equal(await store.getState().deleteHabit('run'),true);
+  assert.deepEqual(plain(store.getState().habits),[{id:'read',name:'Read',type:'numeric'}]);
+  assert.deepEqual(plain(store.getState().habitValues),{'2026-10-25':{Read:'0'},'2026-10-26':{Read:'24'}});
+});
+test('failed habit management preserves local data and late results cannot restore a signed-out account', async () => {
+  for(const action of ['renameHabit','deleteHabit']) {
+    const failed=setup({[action]:async()=>{throw new Error('Offline');}});
+    failed.setState({habits:[habit],habitValues:{'2026-10-25':{Run:'✓'}}});
+    assert.equal(await failed.getState()[action]('run','Walk'),false);
+    assert.deepEqual(plain(failed.getState().habits),[habit]);
+    assert.equal(failed.getState().habitValues['2026-10-25'].Run,'✓');
+    assert.equal(failed.getState().error,'Offline');
+    const gate=deferred(), store=setup({[action]:()=>gate.promise});
+    store.setState({habits:[habit]});
+    const pending=store.getState()[action]('run','Walk');
+    await Promise.resolve();await Promise.resolve();
+    store.getState().clearUser();
+    gate.resolve({...habit,name:'Walk'});
+    assert.equal(await pending,false);
+    assert.deepEqual(plain(store.getState().habits),[]);
+    assert.equal(store.getState().pendingWrites,0);
+  }
+});
+test('a queued habit rename follows pending value writes and deletion prevents later edits', async () => {
+  const gate=deferred(),calls=[];
+  const store=setup({writeHabitValue:async(...args)=>{calls.push(args);await gate.promise;}});
+  store.setState({habits:[habit]});
+  const value=store.getState().toggleHabit('Run','2026-10-25');
+  const rename=store.getState().renameHabit('run','Walk');
+  gate.resolve();
+  assert.deepEqual(await Promise.all([value,rename]),[true,true]);
+  assert.equal(store.getState().habitValues['2026-10-25'].Walk,'✓');
+  assert.equal(await store.getState().deleteHabit('run'),true);
+  assert.equal(await store.getState().toggleHabit('Walk','2026-10-25'),false);
+  assert.equal(calls.length,1);
 });

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getOrCreateWorkoutSheet, loadWorkoutDay, saveWorkoutSets } from '../lib/workoutSheets';
+import { getOrCreateWorkoutSheet, loadWorkoutDay, saveWorkoutSets, renameWorkoutExercise } from '../lib/workoutSheets';
 import { errorMessage, type User } from '../lib/types';
 import { isDateKey } from '../lib/dates';
 import { validateWorkoutSets, type DayWorkouts, type WorkoutSet } from '../lib/workouts';
@@ -17,6 +17,7 @@ interface WorkoutStore {
   clearUser: () => void;
   loadDay: (date: string) => Promise<void>;
   saveExercise: (date: string, name: string, sets: WorkoutSet[]) => Promise<boolean>;
+  renameExercise: (date: string, previousName: string, name: string) => Promise<boolean>;
 }
 
 let sessionVersion = 0;
@@ -84,6 +85,27 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       return false;
     } finally {
       if (isCurrent()) set({ pendingWrites: 0 });
+    }
+  },
+  renameExercise: async (date, previousName, name) => {
+    const { spreadsheetId, loadedDate, isLoading, pendingWrites, workouts } = get();
+    if (!spreadsheetId || loadedDate !== date || isLoading || pendingWrites) return false;
+    const session = sessionVersion;
+    if (!Object.prototype.hasOwnProperty.call(workouts, previousName)) { set({ error: 'Cvik v tomto dni už neexistuje.' }); return false; }
+    set({ pendingWrites: 1, error: null });
+    try {
+      const canonical = await renameWorkoutExercise(spreadsheetId, previousName, name);
+      if (session !== sessionVersion) return false;
+      set((state) => ({
+        exercises: state.exercises.map((entry) => entry === previousName ? canonical : entry),
+        workouts: Object.fromEntries(Object.entries(state.workouts).map(([entry, sets]) => [entry === previousName ? canonical : entry, sets])),
+      }));
+      return true;
+    } catch (error) {
+      if (session === sessionVersion) set({ error: errorMessage(error) });
+      return false;
+    } finally {
+      if (session === sessionVersion) set({ pendingWrites: 0 });
     }
   },
 }));

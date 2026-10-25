@@ -21,10 +21,10 @@ export function GoogleButton({ onLogin, busy }: { onLogin: () => void; busy: boo
   }, [attempt]);
 
   return <div className="mt-4">
-    {loading && <p role="status" className="text-sm text-gray-600">Loading Google sign-in…</p>}
+    {loading && <p role="status" className="text-sm text-gray-600">Načítavam prihlásenie…</p>}
     <button type="button" onClick={onLogin} disabled={loading || !!error || busy} aria-busy={busy}
       style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}
-      className="w-full max-w-xs mx-auto flex items-center justify-center gap-3 h-10 px-3 rounded border border-[#747775] bg-white text-sm font-medium text-[#1f1f1f] hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-wait">
+      className="w-full max-w-xs mx-auto flex items-center justify-center gap-3 h-12 px-3 rounded-lg border border-[#747775] bg-white text-sm font-medium text-[#1f1f1f] hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-wait">
       <svg aria-hidden="true" width="20" height="20" viewBox="0 0 48 48" className="shrink-0">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" />
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6C44.4 38.02 46.98 31.86 46.98 24.55Z" />
@@ -35,7 +35,7 @@ export function GoogleButton({ onLogin, busy }: { onLogin: () => void; busy: boo
     </button>
     {error && <div role="alert" className="text-sm text-red-700">
       <p>{error}</p>
-      <button onClick={() => setAttempt((value) => value + 1)} className="mt-2 underline">Retry</button>
+      <button onClick={() => setAttempt((value) => value + 1)} className="mt-2 underline">Skúsiť znova</button>
     </div>}
   </div>;
 }

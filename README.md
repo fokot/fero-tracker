@@ -32,9 +32,11 @@ Existing three-column trackers (`Date`, `Habit Name`, `Value`) are converted aut
 
 Writes are serialized within an app instance and, when Web Locks are available, across tabs on the same origin. Failed writes display an error and leave the last saved value intact. Offline edits are not queued: reconnect and retry. Concurrent edits from different browsers are not transactionally locked by Google Sheets; refresh to read external changes. A new OAuth project cannot automatically access files created by a different project under the `drive.file` scope.
 
+To manage a habit, hold its name for 550ms on a touch screen or click its name with a mouse. Keyboard activation also opens the editor. A short tap or scrolling does not open it. Renaming changes the column header and definition atomically, preserving the ID, type and every recorded value. Deletion asks for confirmation, then removes that habit's column and definitions across all days; other habits and dates remain intact.
+
 ## Workouts
 
-The **Workouts** tab shows one selected training day, with a card for each exercise performed that day. Add a named exercise and enter sets as separate repetitions/weight rows; weights are in kilograms, including decimals and zero for unweighted exercises. Existing exercise names are offered for reuse on other days. Sets can be added, edited, or removed. Save commits all sets for that exercise together; a failed save retains the draft for retry. Saving an existing exercise without any sets removes it from the selected day while keeping its column for future use.
+The **Workouts** tab shows one selected training day, with a card for each exercise performed that day. One **Upraviť série** button beside the exercise name handles both adding and editing sets. The editor always has an empty final row; starting to fill it adds another empty row automatically. Completely empty rows are ignored on save, while partially filled sets require both repetitions and weight. Weights are in kilograms, including decimals and zero for unweighted exercises. Existing exercise names are offered for reuse on other days. Save commits all sets for that exercise together; a failed save retains the draft for retry. Saving an existing exercise without any sets removes it from the selected day while keeping its column for future use. A new exercise requires at least one completed set.
 
 Workouts are stored in a **separate spreadsheet file**, `Workouts_<email hash>`, created lazily on the first visit to Workouts and reused afterwards. It uses the same Google authorization as habits. Its `Workouts` sheet contains one row per date and one column per exercise:
 
@@ -44,6 +46,8 @@ Workouts are stored in a **separate spreadsheet file**, `Workouts_<email hash>`,
 | 2026-10-26 | 5×102.5 | |
 
 Set order is preserved, with every set of an exercise/day serialized into one cell. New exercise headers and their first values are saved atomically. Habit data and its migration remain in the habits spreadsheet. Do not rename the workout spreadsheet or its `Workouts` sheet if you want automatic discovery to continue working.
+
+Exercise names use the same hold/click gesture. Renaming changes the shared exercise column across all days, keeping its sets. **Vymazať z tohto dňa** asks for confirmation and clears only the selected day's cell, retaining other days and the exercise suggestion for future use. A name already used by another habit or exercise is rejected rather than merging their histories.
 
 ## Checks
 

@@ -141,3 +141,42 @@ test('repeat sign-in reuses the sheet; new sheets begin with only the Date heade
   assert.deepEqual(fresh.rows,[['Date']]);
   const failed=setup({failDrive:true});await assert.rejects(failed.sheets.getOrCreateUserSheet('test@example.com'),/Drive unavailable/);assert.equal(failed.calls.length,1);
 });
+test('renaming a habit updates its header and definitions together and preserves all values and identity', async () => {
+  const env = setup({ rows: [['Date','Run','Read'],['2026-10-25','✓','0'],['2026-10-26','','24']] });
+  const renamed = await env.sheets.renameHabit('sheet-1','read',' Stránky ');
+  assert.deepEqual(plain(renamed), { id:'read', name:'Stránky', type:'numeric' });
+  assert.deepEqual(env.rows, [['Date','Run','Stránky'],['2026-10-25','✓','0'],['2026-10-26','','24']]);
+  assert.deepEqual(env.definitions[2], ['read','Stránky','numeric']);
+  const loaded = await env.sheets.loadHabitData('sheet-1',new Date(2026,9,1),new Date(2026,9,31));
+  assert.equal(loaded.habits[1].id,'read');
+  assert.equal(loaded.habits[1].type,'numeric');
+  assert.equal(loaded.values.find((entry)=>entry.habitName==='Stránky' && entry.date==='2026-10-25').value,'0');
+  assert.equal(env.calls.filter((call)=>call.method==='POST').length,1);
+});
+test('habit removal deletes exactly its column and metadata and a refresh never recreates it', async () => {
+  const env=setup({rows:[['Date','Run','Read'],['2026-10-25','✓','24'],['2026-10-26','','0']],definitions:[['ID','Name','Type'],['run','Run','boolean'],['read','Read','numeric'],['duplicate','Run','boolean']]});
+  await env.sheets.deleteHabit('sheet-1','run');
+  assert.deepEqual(env.rows,[['Date','Read'],['2026-10-25','24'],['2026-10-26','0']]);
+  assert.deepEqual(env.definitions,[['ID','Name','Type'],['read','Read','numeric']]);
+  await env.sheets.loadHabitData('sheet-1',new Date(2026,9,1),new Date(2026,9,31));
+  assert.deepEqual(env.rows[0],['Date','Read']);
+  await env.sheets.deleteHabit('sheet-1','read');
+  assert.deepEqual(env.rows,[['Date'],['2026-10-25'],['2026-10-26']]);
+  assert.deepEqual(env.definitions,[['ID','Name','Type']]);
+});
+test('invalid, duplicate and missing habit edits cannot change the spreadsheet', async () => {
+  const env=setup();
+  for(const name of ['','   ','x'.repeat(101),' READ ']) await assert.rejects(env.sheets.renameHabit('sheet-1','run',name));
+  await assert.rejects(env.sheets.renameHabit('sheet-1','missing','Walk'));
+  await assert.rejects(env.sheets.deleteHabit('sheet-1','missing'));
+  assert.deepEqual(env.rows,[['Date','Run','Read']]);
+  assert.equal(env.calls.filter((call)=>call.method==='POST').length,0);
+});
+test('failed rename and deletion batches preserve both habit data and definitions', async () => {
+  for(const action of ['renameHabit','deleteHabit']) {
+    const env=setup({failBatch:true,rows:[['Date','Run','Read'],['2026-10-25','✓','24']]});
+    const before=plain(env.tabs);
+    await assert.rejects(env.sheets[action]('sheet-1','run','Walk'),/batch failure/);
+    assert.deepEqual(env.tabs,before);
+  }
+});

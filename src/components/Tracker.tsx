@@ -3,6 +3,7 @@ import { useHabitStore } from '../store/useHabitStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { HabitGrid } from './HabitGrid';
 import { Workouts } from './Workouts';
+import { Icon } from './Icon';
 
 export function Tracker({ onSignOut }: { onSignOut: () => void }) {
   const user = useHabitStore((state) => state.user);
@@ -13,26 +14,20 @@ export function Tracker({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     if (user && useWorkoutStore.getState().user?.id !== user.id) useWorkoutStore.getState().setUser(user);
   }, [user]);
-  return <div className="min-h-screen bg-gray-50">
-    <header className="bg-white border-b">
-      <div className="max-w-7xl mx-auto px-4 pt-3">
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <p className="text-xl font-bold text-gray-900">Fero Tracker</p>
-          <div className="flex items-center gap-3 min-w-0">
-            {user?.picture && <img src={user.picture} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full" />}
-            <span className="text-sm text-gray-700 truncate max-w-[12rem]">{user?.email}</span>
-            <button onClick={onSignOut} disabled={busy} className="px-2 py-3 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50">Sign out</button>
-          </div>
-        </div>
-        <nav aria-label="Sekcie trackera" className="flex gap-6 mt-2">
-          {(['habits', 'workouts'] as const).map((name) => <button key={name} onClick={() => setTab(name)} disabled={busy}
-            aria-current={tab === name ? 'page' : undefined}
-            className={`px-1 py-3 text-sm font-semibold border-b-2 disabled:opacity-50 ${tab === name ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-600 hover:text-gray-900'}`}>
-            {name === 'habits' ? 'Habits' : 'Workouts'}
-          </button>)}
-        </nav>
+  return <div className="tracker-shell">
+    <header className="app-header">
+      <a className="brand" href="#main-content" aria-label="Fero Tracker, prejsť na obsah"><span className="brand-mark" aria-hidden="true"><Icon name="check" size={19} /></span>Fero<span className="brand-light">Tracker</span></a>
+      <div className="account">
+        <span className="account-email" title={user?.email}>{user?.email}</span>
+        {user?.picture ? <img src={user.picture} alt="" referrerPolicy="no-referrer" className="account-avatar" /> : <span className="account-avatar account-initial" aria-hidden="true">{(user?.name || user?.email || 'F').slice(0, 1).toUpperCase()}</span>}
+        <button onClick={onSignOut} disabled={busy} className="icon-button sign-out" aria-label="Sign out" title="Odhlásiť sa"><Icon name="logout" size={18} /></button>
       </div>
     </header>
+    <nav aria-label="Sekcie trackera" className="app-nav">
+      {(['habits', 'workouts'] as const).map((name) => <button key={name} onClick={() => setTab(name)} disabled={busy} aria-current={tab === name ? 'page' : undefined} className={`nav-item ${tab === name ? 'is-active' : ''}`}>
+        <Icon name={name} size={23} /><span>{name === 'habits' ? 'Habits' : 'Workouts'}</span>
+      </button>)}
+    </nav>
     {tab === 'habits' ? <HabitGrid /> : <Workouts />}
   </div>;
 }

@@ -175,6 +175,51 @@ export function saveHabit(id: string, habit: Habit): Promise<void> {
   });
 }
 
+async function definitionPositions(id: string, name: string): Promise<{ sheetId: number; rows: number[] }> {
+  const [metadata, rows] = await Promise.all([
+    googleRequest<Spreadsheet>(`${sheetUrl(id)}?fields=sheets(properties)`),
+    readRows(id, 'HabitDefinitions!A:C'),
+  ]);
+  const tab = metadata.sheets.find(({ properties }) => properties.title === 'HabitDefinitions');
+  const matching = rows.flatMap((row, index) => index > 0 && row[1] === name ? [index] : []);
+  if (!tab || !matching.length) throw new Error('Definícia návyku chýba. Obnov návyky a skús to znova.');
+  return { sheetId: tab.properties.sheetId, rows: matching };
+}
+
+export function renameHabit(id: string, habitId: string, input: string): Promise<Habit> {
+  return serialize(id, async () => {
+    const name = input.trim();
+    if (!name || name.length > 100) throw new Error('Názov návyku musí mať 1 až 100 znakov.');
+    const { rows, habits, sheet } = await prepareData(id);
+    const habit = habits.find((entry) => entry.id === habitId);
+    if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
+    if (habits.some((entry) => entry.name !== habit.name && entry.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('Návyk s týmto názvom už existuje.');
+    if (habit.name === name) return habit;
+    const column = rows[0].indexOf(habit.name, 1);
+    const definitions = await definitionPositions(id, habit.name);
+    await batch(id, [
+      { updateCells: { start: { sheetId: sheet.sheetId, rowIndex: 0, columnIndex: column }, rows: rowData([[name]]), fields: 'userEnteredValue' } },
+      ...definitions.rows.map((rowIndex) => ({ updateCells: { start: { sheetId: definitions.sheetId, rowIndex, columnIndex: 1 }, rows: rowData([[name]]), fields: 'userEnteredValue' } })),
+    ]);
+    return { ...habit, name };
+  });
+}
+
+export function deleteHabit(id: string, habitId: string): Promise<void> {
+  return serialize(id, async () => {
+    const { rows, habits, sheet } = await prepareData(id);
+    const habit = habits.find((entry) => entry.id === habitId);
+    if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
+    const column = rows[0].indexOf(habit.name, 1);
+    const definitions = await definitionPositions(id, habit.name);
+    // Remove metadata in the same batch so a refresh cannot recreate the column.
+    await batch(id, [
+      { deleteDimension: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: column, endIndex: column + 1 } } },
+      ...definitions.rows.sort((a, b) => b - a).map((row) => ({ deleteDimension: { range: { sheetId: definitions.sheetId, dimension: 'ROWS', startIndex: row, endIndex: row + 1 } } })),
+    ]);
+  });
+}
+
 export function writeHabitValue(id: string, date: string, habitName: string, value: string): Promise<void> {
   return serialize(id, async () => {
     if (!isDateKey(date) || !habitName.trim()) throw new Error('Invalid habit or date.');

@@ -50,6 +50,19 @@ export function loadWorkoutDay(id: string, date: string): Promise<{ exercises: s
   });
 }
 
+export function renameWorkoutExercise(id: string, previousName: string, input: string): Promise<string> {
+  return serialize(id, async () => {
+    const name = input.trim();
+    if (!name || name.length > 100) throw new Error('Názov cviku musí mať 1 až 100 znakov.');
+    const { rows, sheet } = await snapshot(id);
+    const column = rows[0].indexOf(previousName, 1);
+    if (column < 1) throw new Error('Cvik už neexistuje. Obnov tréning.');
+    if (rows[0].some((entry, index) => index > 0 && index !== column && entry.trim().toLowerCase() === name.toLowerCase())) throw new Error('Cvik s týmto názvom už existuje.');
+    if (name !== previousName) await batch(id, [{ updateCells: { start: { sheetId: sheet.sheetId, rowIndex: 0, columnIndex: column }, rows: rowData([[name]]), fields: 'userEnteredValue' } }]);
+    return name;
+  });
+}
+
 export async function saveWorkoutSets(id: string, date: string, name: string, sets: WorkoutSet[]): Promise<string> {
   // Capture the complete cell value before the queued write can yield.
   const value = formatWorkoutSets(sets);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { loadHabitData, saveHabit, writeHabitValue } from '../lib/googleSheets';
+import { loadHabitData, saveHabit, writeHabitValue, renameHabit, deleteHabit } from '../lib/googleSheets';
 import { errorMessage, type Habit, type HabitType, type HabitValues, type User } from '../lib/types';
 
 interface HabitStore {
@@ -15,6 +15,8 @@ interface HabitStore {
   clearUser: () => void;
   loadHabitsAndValues: (start: Date, end: Date) => Promise<void>;
   addHabit: (name: string, type: HabitType) => Promise<boolean>;
+  renameHabit: (habitId: string, name: string) => Promise<boolean>;
+  deleteHabit: (habitId: string) => Promise<boolean>;
   toggleHabit: (name: string, date: string) => Promise<boolean>;
   setNumericValue: (name: string, date: string, value: string) => Promise<boolean>;
 }
@@ -23,6 +25,15 @@ let sessionVersion = 0;
 let loadVersion = 0;
 let mutationQueue: Promise<unknown> = Promise.resolve();
 const emptyState = () => ({ user: null, spreadsheetId: null, habits: [], habitValues: {}, isLoading: false, hasLoaded: false, pendingWrites: 0, error: null });
+
+function remapValues(values: HabitValues, previousName: string, name?: string): HabitValues {
+  return Object.fromEntries(Object.entries(values).map(([date, entries]) => {
+    const next = { ...entries };
+    delete next[previousName];
+    if (name !== undefined && Object.prototype.hasOwnProperty.call(entries, previousName)) Object.defineProperty(next, name, { value: entries[previousName], enumerable: true, writable: true, configurable: true });
+    return [date, next];
+  }));
+}
 
 export const useHabitStore = create<HabitStore>((set, get) => {
   function mutate(operation: (id: string, isCurrent: () => boolean) => Promise<void>): Promise<boolean> {
@@ -96,6 +107,21 @@ export const useHabitStore = create<HabitStore>((set, get) => {
       const habit: Habit = { id: crypto.randomUUID(), name: trimmed, type };
       await saveHabit(id, habit);
       if (isCurrent()) set((state) => ({ habits: [...state.habits, habit] }));
+    }),
+    renameHabit: (habitId, name) => mutate(async (id, isCurrent) => {
+      const habit = get().habits.find((entry) => entry.id === habitId);
+      if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
+      const updated = await renameHabit(id, habitId, name);
+      if (isCurrent()) set((state) => ({
+        habits: state.habits.map((entry) => entry.id === habitId ? updated : entry),
+        habitValues: remapValues(state.habitValues, habit.name, updated.name),
+      }));
+    }),
+    deleteHabit: (habitId) => mutate(async (id, isCurrent) => {
+      const habit = get().habits.find((entry) => entry.id === habitId);
+      if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
+      await deleteHabit(id, habitId);
+      if (isCurrent()) set((state) => ({ habits: state.habits.filter((entry) => entry.id !== habitId), habitValues: remapValues(state.habitValues, habit.name) }));
     }),
     toggleHabit: (name, date) => mutate(async (id, isCurrent) => {
       if (!get().habits.some((habit) => habit.name === name && habit.type === 'boolean')) throw new Error('This habit cannot be toggled.');

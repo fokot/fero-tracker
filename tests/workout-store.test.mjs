@@ -5,7 +5,7 @@ const user = { id: 'one', email: 'test@example.com' };
 const date = '2026-10-25';
 const sets = [{ reps: 5, weight: 100 }, { reps: 3, weight: 120 }];
 function setup(overrides = {}) {
-  const api = { getOrCreateWorkoutSheet: async () => 'workout-sheet', loadWorkoutDay: async () => ({ exercises: [], workouts: {} }), saveWorkoutSets: async (id, date, name) => name.trim(), ...overrides };
+  const api = { getOrCreateWorkoutSheet: async () => 'workout-sheet', loadWorkoutDay: async () => ({ exercises: [], workouts: {} }), saveWorkoutSets: async (id, date, name) => name.trim(), renameWorkoutExercise:async(id,previous,name)=>name.trim(), ...overrides };
   const { useWorkoutStore: store } = createLoader({ mocks: { '../lib/workoutSheets': api } })('src/store/useWorkoutStore.ts');
   store.getState().setUser(user);
   return store;
@@ -100,4 +100,35 @@ test('discovery can retry and special exercise names are ordinary data keys', as
   assert.equal(await store.getState().saveExercise(date, '__proto__', sets), true);
   assert.deepEqual(plain(store.getState().workouts['__proto__']), sets);
   assert.deepEqual(Object.keys(store.getState().workouts), ['__proto__']);
+});
+test('workout renaming retains sets and suggestions; deleting clears only the selected day entry', async () => {
+  const store=setup();
+  await store.getState().loadDay(date);
+  store.setState({exercises:['Bench','Drep'],workouts:{Bench:sets,Drep:[{reps:5,weight:80}]}});
+  assert.equal(await store.getState().renameExercise(date,'Bench','__proto__'),true);
+  assert.deepEqual(plain(store.getState().workouts['__proto__']),sets);
+  assert.deepEqual(plain(store.getState().exercises),['__proto__','Drep']);
+  assert.equal(await store.getState().saveExercise(date,'__proto__',[]),true);
+  assert.deepEqual(Object.keys(store.getState().workouts),['Drep']);
+  assert.deepEqual(plain(store.getState().exercises),['__proto__','Drep']);
+});
+test('failed and late workout renames preserve data or respect sign-out; concurrent edits are blocked', async () => {
+  const failed=setup({renameWorkoutExercise:async()=>{throw new Error('Offline');}});
+  await failed.getState().loadDay(date);
+  failed.setState({exercises:['Bench'],workouts:{Bench:sets}});
+  assert.equal(await failed.getState().renameExercise(date,'Bench','Tlaky'),false);
+  assert.deepEqual(plain(failed.getState().workouts),{Bench:sets});
+  assert.equal(failed.getState().error,'Offline');
+  assert.equal(await failed.getState().renameExercise('2026-10-26','Bench','Tlaky'),false);
+  const gate=deferred(),store=setup({renameWorkoutExercise:()=>gate.promise});
+  await store.getState().loadDay(date);
+  store.setState({exercises:['Bench'],workouts:{Bench:sets}});
+  const pending=store.getState().renameExercise(date,'Bench','Tlaky');
+  assert.equal(await store.getState().saveExercise(date,'Bench',[]),false);
+  assert.equal(await store.getState().renameExercise(date,'Bench','Other'),false);
+  store.getState().clearUser();
+  gate.resolve('Tlaky');
+  assert.equal(await pending,false);
+  assert.deepEqual(plain(store.getState().workouts),{});
+  assert.equal(store.getState().pendingWrites,0);
 });
