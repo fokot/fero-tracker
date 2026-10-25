@@ -53,23 +53,22 @@ Build a habit tracking PWA where users:
 
 Each user gets their own sheet named: `Habits_<hash_of_email>`
 
-**Sheet format (3 columns, rows for each habit+date combination):**
+**Sheet format (one row per date, one column per habit):**
 ```
-| Date       | Habit Name    | Value |
-|------------|---------------|-------|
-| 2026-07-01 | Drink water   | ✓     |
-| 2026-07-01 | Read pages    | 5     |
-| 2026-07-02 | Drink water   | ✓     |
-| 2026-07-02 | Read pages    | 8     |
-| ...        | ...           | ...   |
+| Date       | Drink water | Read pages |
+|------------|-------------|------------|
+| 2026-07-01 | ✓           | 5          |
+| 2026-07-02 | ✓           | 8          |
+| ...        | ...         | ...        |
 ```
 
 **Key points:**
 - Column A: Date (ISO format `YYYY-MM-DD`)
-- Column B: Habit Name
-- Column C: Value (`✓` for boolean completed, number for numeric habits)
-- All historical dates exist as rows
-- New days are added with one row per habit when tracked
+- Columns B onward: one named habit per column (`✓` for completed boolean habits, numeric values for numeric habits)
+- Each tracked date exists only once; editing an existing date changes one cell
+- New habits append a header column immediately, even without recorded values
+- A separate `HabitDefinitions` tab stores stable habit IDs, names, and types
+- Old three-column trackers are pivoted after backing up their original tab; backup and conversion are atomic
 
 ### 2.2 App Data Structure (in-memory)
 
@@ -94,8 +93,9 @@ interface AppState {
 
 ### 3.1 Authentication
 
-- Google sign-in button using Google Identity Services
-- OAuth2 scope: `https://www.googleapis.com/auth/spreadsheets`
+- One Google Identity Services OAuth button handles account selection and file access together
+- Google userinfo establishes the authorized account before opening the tracker; there is no separate ID-token sign-in or Connect Google Sheets step
+- OAuth2 scopes: `openid email profile https://www.googleapis.com/auth/drive.file`
 - Store user's access token in memory (not localStorage for security)
 - Auto-signout on token expiry
 - Show user email/name after login
@@ -124,7 +124,7 @@ interface AppState {
 **Features:**
 - Horizontal scroll to see more dates
 - Tap cell to toggle (boolean) or enter number
-- Only writes the single row for that habit+date combination
+- Only changes the single cell for that habit+date combination
 - Swipe gesture for quick toggles on boolean habits
 - "Today" highlight
 
@@ -174,7 +174,7 @@ Type: (•) Boolean  ( ) Numeric
 2. Click "Sign in with Google"
 3. User authenticates
 4. App checks if user's sheet exists
-5a. If no: create new sheet with columns [Date, Habit Name, Value]
+5a. If no: create a new sheet with a Date column; append columns as habits are added
 5b. If yes: load data for visible date range
 6. Display habit grid (populated with historical + future dates)
 ```
@@ -184,7 +184,7 @@ Type: (•) Boolean  ( ) Numeric
 1. Open app (already logged in)
 2. Scroll to see dates (last 30 days + future)
 3. Tap cell to mark habit for that date
-4. App writes only ONE row: [Date, Habit Name, Value]
+4. App updates the habit column in the date's row, creating that date row if needed
 5. Sync indicator confirms save
 6. Empty cells remain empty until tracked
 ```
