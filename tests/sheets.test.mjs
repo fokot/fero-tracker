@@ -180,3 +180,24 @@ test('failed rename and deletion batches preserve both habit data and definition
     assert.deepEqual(env.tabs,before);
   }
 });
+test('connecting a chosen file adds only missing tracker tabs and preserves unrelated data', async()=>{
+  const env=setup({sheetName:'Notes',definitions:null,rows:[['Private notes'],['Keep me']]});
+  await env.sheets.connectHabitSheet('sheet-1');
+  assert.deepEqual(env.rows,[['Private notes'],['Keep me']]);
+  assert.deepEqual(env.tabs.find(tab=>tab.properties.title==='Habits').rows,[['Date']]);
+  assert.deepEqual(env.definitions,[['ID','Name','Type']]);
+});
+test('connecting an empty Habits tab initializes it, but incompatible populated tabs are not overwritten',async()=>{
+  const empty=setup({rows:[],definitions:null});await empty.sheets.connectHabitSheet('sheet-1');assert.deepEqual(empty.rows,[['Date']]);
+  const invalid=setup({rows:[['Do not change'],['data']]});const before=plain(invalid.tabs);
+  await assert.rejects(invalid.sheets.connectHabitSheet('sheet-1'),/first Habits column/);
+  assert.deepEqual(invalid.tabs,before);
+  const failure=setup({sheetName:'Notes',definitions:null,rows:[['Keep']],failBatch:true});
+  await assert.rejects(failure.sheets.connectHabitSheet('sheet-1'),/batch failure/);assert.deepEqual(failure.rows,[['Keep']]);
+});
+test('an unrelated HabitDefinitions tab is rejected before any tracker tab is added or changed',async()=>{
+  const env=setup({sheetName:'Notes',rows:[['Keep notes']],definitions:[['Other data'],['Keep this too']]});
+  const before=plain(env.tabs);
+  await assert.rejects(env.sheets.connectHabitSheet('sheet-1'),/HabitDefinitions má iný formát/);
+  assert.deepEqual(env.tabs,before);
+});

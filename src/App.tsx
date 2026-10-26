@@ -6,6 +6,7 @@ import { getAuthorizedUser, getOrCreateUserSheet } from './lib/googleSheets';
 import { errorMessage } from './lib/types';
 import { useHabitStore } from './store/useHabitStore';
 import { useWorkoutStore } from './store/useWorkoutStore';
+import { readSheetChoices } from './lib/preferences';
 
 function App() {
   const user = useHabitStore((state) => state.user);
@@ -41,10 +42,18 @@ function App() {
       if (current !== attempt.current) return;
       const authorized = await getAuthorizedUser();
       if (current !== attempt.current) return;
-      const spreadsheetId = await getOrCreateUserSheet(authorized.email);
+      const choices = readSheetChoices(authorized.id);
+      let spreadsheetId = choices.habits?.id ?? null;
+      let sheetError: string | null = null;
+      if (!spreadsheetId) {
+        try { spreadsheetId = await getOrCreateUserSheet(authorized.email); }
+        catch (reason) { sheetError = errorMessage(reason); }
+      }
       if (current === attempt.current) {
         useWorkoutStore.getState().setUser(authorized);
+        if (choices.workouts) useWorkoutStore.getState().setSpreadsheet(choices.workouts.id);
         useHabitStore.getState().setSession(authorized, spreadsheetId);
+        if (sheetError) useHabitStore.setState({ error: sheetError });
       }
     } catch (reason) {
       if (current === attempt.current) { signOut(); setError(errorMessage(reason)); }

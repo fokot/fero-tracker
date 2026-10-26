@@ -119,3 +119,12 @@ test('renaming only letter case works without creating a second exercise column'
   await env.sheets.renameWorkoutExercise('sheet-1','Bench press','BENCH PRESS');
   assert.deepEqual(env.rows,[['Date','BENCH PRESS','Drep']]);
 });
+test('connecting a workout file preserves unrelated sheets and rejects incompatible existing data',async()=>{
+  const other=setup({sheetName:'Notes',rows:[['Keep'],['Original']]});
+  await other.sheets.connectWorkoutSheet('sheet-1');
+  assert.deepEqual(other.rows,[['Keep'],['Original']]);
+  assert.deepEqual(other.tabs.find(tab=>tab.properties.title==='Workouts').rows,[['Date']]);
+  const empty=setup({rows:[]});await empty.sheets.connectWorkoutSheet('sheet-1');assert.deepEqual(empty.rows,[['Date']]);
+  const invalid=setup({rows:[['Wrong header'],['Important data']]});
+  await assert.rejects(invalid.sheets.connectWorkoutSheet('sheet-1'),/Prvý stĺpec/);assert.deepEqual(invalid.rows,[['Wrong header'],['Important data']]);
+});

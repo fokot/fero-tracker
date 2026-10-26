@@ -14,6 +14,7 @@ interface WorkoutStore {
   pendingWrites: number;
   error: string | null;
   setUser: (user: User) => void;
+  setSpreadsheet: (id: string) => void;
   clearUser: () => void;
   loadDay: (date: string) => Promise<void>;
   saveExercise: (date: string, name: string, sets: WorkoutSet[]) => Promise<boolean>;
@@ -38,6 +39,13 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     loadVersion++;
     discovery = null;
     set(emptyState());
+  },
+  setSpreadsheet: (spreadsheetId) => {
+    if (get().pendingWrites) return;
+    sessionVersion++;
+    loadVersion++;
+    discovery = null;
+    set({ ...emptyState(), user: get().user, spreadsheetId });
   },
   loadDay: async (date) => {
     const { user, pendingWrites } = get();

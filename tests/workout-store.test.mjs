@@ -132,3 +132,10 @@ test('failed and late workout renames preserve data or respect sign-out; concurr
   assert.deepEqual(plain(store.getState().workouts),{});
   assert.equal(store.getState().pendingWrites,0);
 });
+test('choosing a workout sheet invalidates old loads and never rediscovers another file',async()=>{
+  const gate=deferred();let discoveries=0;
+  const store=setup({getOrCreateWorkoutSheet:async()=>{discoveries++;return 'default';},loadWorkoutDay:()=>gate.promise});
+  store.getState().setSpreadsheet('selected');const pending=store.getState().loadDay(date);
+  store.getState().setSpreadsheet('replacement');gate.resolve({exercises:['Old'],workouts:{Old:sets}});await pending;
+  assert.equal(store.getState().spreadsheetId,'replacement');assert.equal(store.getState().loadedDate,null);assert.deepEqual(plain(store.getState().workouts),{});assert.equal(discoveries,0);
+});

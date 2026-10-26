@@ -45,6 +45,25 @@ export async function readRows(id: string, range: string): Promise<string[][]> {
   return (response.values ?? []).map((row) => row.map(String));
 }
 
+// Only create the tracker's own tab or initialize an entirely empty one.
+// Unrelated tabs and populated cells are never replaced by a connection change.
+export async function ensureTrackerTab(id: string, title: 'Habits' | 'Workouts'): Promise<void> {
+  const spreadsheet = await googleRequest<Spreadsheet>(`${sheetUrl(id)}?fields=sheets(properties)`);
+  const existing = spreadsheet.sheets.find((sheet) => sheet.properties.title === title);
+  if (existing) {
+    const rows = await readRows(id, `'${title}'`);
+    if (!rows.some((row) => row.some((value) => value !== ''))) await batch(id, [{ updateCells: {
+      start: { sheetId: existing.properties.sheetId, rowIndex: 0, columnIndex: 0 }, rows: rowData([['Date']]), fields: 'userEnteredValue',
+    } }]);
+  } else {
+    const sheetId = Math.max(-1, ...spreadsheet.sheets.map((sheet) => sheet.properties.sheetId)) + 1;
+    await batch(id, [
+      { addSheet: { properties: { sheetId, title, gridProperties: { rowCount: 1000, columnCount: 26, frozenRowCount: 1, frozenColumnCount: 1 } } } },
+      { updateCells: { start: { sheetId, rowIndex: 0, columnIndex: 0 }, rows: rowData([['Date']]), fields: 'userEnteredValue' } },
+    ]);
+  }
+}
+
 export function columnName(column: number): string {
   if (!Number.isInteger(column) || column < 1) throw new Error('Invalid column number.');
   let name = '';

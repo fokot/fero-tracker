@@ -1,6 +1,6 @@
 import { googleRequest } from './googleApi';
 import { isDateKey } from './dates';
-import { SHEETS, batch, post, readRows, rowData, serialize, sheetUrl, trackerSheetName, type SheetProperties, type Spreadsheet } from './googleSheetsClient';
+import { SHEETS, batch, ensureTrackerTab, post, readRows, rowData, serialize, sheetUrl, trackerSheetName, type SheetProperties, type Spreadsheet } from './googleSheetsClient';
 import { formatWorkoutSets, parseWorkoutSets, type DayWorkouts, type WorkoutSet } from './workouts';
 
 async function snapshot(id: string): Promise<{ rows: string[][]; sheet: SheetProperties }> {
@@ -12,6 +12,10 @@ async function snapshot(id: string): Promise<{ rows: string[][]; sheet: SheetPro
   const names = rows[0].slice(1).map((name) => name.trim().toLowerCase());
   if (names.some((name) => !name) || new Set(names).size !== names.length) throw new Error('Každý cvik v tabuľke musí mať jedinečný, neprázdny názov.');
   return { rows, sheet: tab.properties };
+}
+
+export function connectWorkoutSheet(id: string): Promise<void> {
+  return serialize(id, async () => { await ensureTrackerTab(id, 'Workouts'); await snapshot(id); });
 }
 
 export async function getOrCreateWorkoutSheet(email: string): Promise<string> {

@@ -3,7 +3,7 @@ import { dateKey, isDateKey } from './dates';
 import type { Habit, HabitValue, User } from './types';
 
 import {
-  SHEETS, batch, columnName, post, readRows, rowData, serialize, sheetUrl,
+  SHEETS, batch, columnName, ensureTrackerTab, post, readRows, rowData, serialize, sheetUrl,
   trackerSheetName, type SheetProperties, type Spreadsheet,
 } from './googleSheetsClient';
 export { columnName } from './googleSheetsClient';
@@ -156,6 +156,20 @@ export function loadHabitData(id: string, start: Date, end: Date): Promise<{ hab
 }
 export async function readHabitsInRange(id: string, start: Date, end: Date): Promise<HabitValue[]> {
   return (await loadHabitData(id, start, end)).values;
+}
+
+export function connectHabitSheet(id: string): Promise<void> {
+  return serialize(id, async () => {
+    const metadata = await googleRequest<Spreadsheet>(`${sheetUrl(id)}?fields=sheets(properties)`);
+    if (metadata.sheets.some(({ properties }) => properties.title === 'HabitDefinitions')) {
+      const rows = await readRows(id, 'HabitDefinitions!A:C');
+      if (rows.some((row) => row.some((value) => value !== '')) && ['ID', 'Name', 'Type'].some((value, index) => rows[0]?.[index] !== value)) {
+        throw new Error('List HabitDefinitions má iný formát. Vyber inú tabuľku; existujúce dáta sa nezmenili.');
+      }
+    }
+    await ensureTrackerTab(id, 'Habits');
+    await prepareData(id);
+  });
 }
 
 export function saveHabit(id: string, habit: Habit): Promise<void> {

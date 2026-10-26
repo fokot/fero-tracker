@@ -14,11 +14,11 @@ export function deferred() {
 
 // Exercise the actual TypeScript modules, using only the existing TypeScript
 // dependency and Node's test runner. Each loader has its own module state.
-export function createLoader({ globals = {}, mocks = {} } = {}) {
+export function createLoader({ globals = {}, mocks = {}, env = { VITE_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com' } } = {}) {
   const cache = new Map();
   const context = vm.createContext({
     console, Error, TypeError, setTimeout, clearTimeout, setInterval, clearInterval,
-    TextEncoder, TextDecoder, atob, btoa, URLSearchParams, AbortController,
+    TextEncoder, TextDecoder, atob, btoa, URL, URLSearchParams, AbortController,
     crypto: globalThis.crypto, Event, ...globals,
   });
   function load(relative) {
@@ -26,7 +26,7 @@ export function createLoader({ globals = {}, mocks = {} } = {}) {
     if (cache.has(file)) return cache.get(file).exports;
     const module = { exports: {} };
     cache.set(file, module);
-    const text = fs.readFileSync(file, 'utf8').replaceAll('import.meta.env', '({VITE_GOOGLE_CLIENT_ID: "test.apps.googleusercontent.com"})');
+    const text = fs.readFileSync(file, 'utf8').replaceAll('import.meta.env', `(${JSON.stringify(env)})`);
     const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const require = (name) => {
       if (mocks[name]) return mocks[name];

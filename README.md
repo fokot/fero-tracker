@@ -12,7 +12,25 @@ React, TypeScript and Zustand habit tracker backed by the signed-in user's Googl
 6. Copy `.env.example` to `.env.local`, set `VITE_GOOGLE_CLIENT_ID`, and run `npm run dev`. Restart Vite after changing environment variables.
 7. Open `http://localhost:5173` and click **Prihlásiť sa cez Google**. One Google OAuth flow handles account selection and spreadsheet permission, then opens the tracker directly. Google still asks for any permissions you have not granted yet; there is no separate Connect Google Sheets step in the app.
 
-No API key or client secret is needed. Client IDs are public configuration. Access tokens are held only in memory and are cleared at sign-out or expiry. The app obtains the signed-in account directly from Google's userinfo API using the OAuth access token before opening a spreadsheet. It does not run a separate ID-token sign-in flow or force consent for permissions already granted.
+No client secret is used. Login, creating sheets and choosing files already accessible to the app do not need an API key. Client IDs are public configuration. Access tokens are held only in memory and are cleared at sign-out or expiry. The app obtains the signed-in account directly from Google's userinfo API using the OAuth access token before opening a spreadsheet. It does not run a separate ID-token sign-in flow or force consent for permissions already granted.
+
+## Settings and appearance
+
+Open the gear button in the header for **Nastavenia**. Appearance defaults to **Podľa zariadenia**, follows live changes to the system's light/dark mode, and can be overridden with **Svetlý** or **Tmavý**. The preference is saved in this browser and is applied before the first render, including on the login screen. Storage restrictions do not prevent switching the current page's theme.
+
+Habits and Workouts have independent spreadsheet connections. Settings can list editable Sheets already granted to the app, verify a URL/ID, or create a new spreadsheet. A selected existing file is reviewed before connecting. The app uses its own `Habits`/`HabitDefinitions` or `Workouts` tabs, creates missing tabs, and never overwrites unrelated tabs or incompatible populated headers. Switching does not copy, merge or delete data in the previous file. Failed validation retains the previous connection. Files must be different for the two trackers. Choices are saved per Google account in this browser and restored on the next login; custom file names do not affect reconnection. Without a saved selection, the original automatic file discovery continues. If automatic habit discovery fails, the signed-in user can still open Settings and choose another file.
+
+### Optional full Google Drive file browser
+
+The **Prehliadať Disk Google** button uses Google Picker to grant access to an additional file without widening the existing `drive.file` OAuth scope. Configure the same Google Cloud project as the OAuth client:
+
+1. **APIs & Services → Library → Google Picker API → Enable**.
+2. **APIs & Services → Credentials → Create credentials → API key**.
+3. Restrict the key under **Application restrictions → Websites** to your app's website referrers (for local development, `http://localhost:5173/*`) and `https://docs.google.com/*`. Under **API restrictions → Restrict key**, select **Google Picker API** and **Google Drive API**.
+4. Find the **Project number** under **IAM & Admin → Settings**.
+5. Set `VITE_GOOGLE_PICKER_API_KEY` and `VITE_GOOGLE_PROJECT_NUMBER` in `.env.local`, then restart Vite. These are public browser configuration, not a client secret.
+
+See the [official Google Picker setup](https://developers.google.com/workspace/drive/picker/guides/web-picker-sample). Without this optional configuration, settings still offer creation and app-accessible sheets; pasting a URL cannot grant access to an arbitrary Drive file by itself.
 
 ## Data and synchronization
 

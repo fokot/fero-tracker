@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type IconName = 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash';
+type IconName = 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash' | 'settings' | 'sun' | 'moon' | 'system' | 'sheet';
 const paths: Record<IconName, ReactNode> = {
   habits: <><rect x="3.5" y="3.5" width="17" height="17" rx="4" /><path d="M3.5 9h17M9 9v11.5m5-6 2 2 4-4" /></>,
   workouts: <><path d="M7 6v12M4 9v6m13-9v12m3-9v6M7 12h10" /></>,
@@ -15,6 +15,11 @@ const paths: Record<IconName, ReactNode> = {
   today: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M8 3v4m8-4v4M4 10h16" /><circle cx="12" cy="15" r="1.5" fill="currentColor" stroke="none" /></>,
   edit: <><path d="m15 4 5 5M4 20l5-1 11-11a2.1 2.1 0 0 0-5-5L4 14Z" /></>,
   trash: <><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6m4-6v6" /></>,
+  settings: <><path d="m9 3-.6 2-2 .9-2-.4L2.5 9l1.4 1.6v2.8L2.5 15l1.9 3.5 2-.4 2 .9.6 2h4l.6-2 2-.9 2 .4 1.9-3.5-1.4-1.6v-2.8L19.5 9l-1.9-3.5-2 .4-2-.9L13 3Z" /><circle cx="11" cy="12" r="3" /></>,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5" /></>,
+  moon: <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z" />,
+  system: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></>,
+  sheet: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6M8 13h8m-8 4h8m-4-4v4" /></>,
 };
 export function Icon({ name, size = 20, className = '' }: { name: IconName; size?: number; className?: string }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>{paths[name]}</svg>;

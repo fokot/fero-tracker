@@ -11,7 +11,7 @@ interface HabitStore {
   hasLoaded: boolean;
   pendingWrites: number;
   error: string | null;
-  setSession: (user: User, spreadsheetId: string) => void;
+  setSession: (user: User, spreadsheetId: string | null) => void;
   clearUser: () => void;
   loadHabitsAndValues: (start: Date, end: Date) => Promise<void>;
   addHabit: (name: string, type: HabitType) => Promise<boolean>;

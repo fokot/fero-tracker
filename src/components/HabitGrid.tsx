@@ -91,7 +91,7 @@ export function HabitGrid() {
       </div>
     </div>
     {error && <p role="alert" className="error-banner">{error}</p>}
-    {!habits.length ? <div className="empty-state"><Icon name="habits" size={32} /><h2>{hasLoaded ? 'Začni jedným návykom' : error ? 'Skús obnoviť svoje návyky' : 'Načítavam návyky…'}</h2>{hasLoaded && <p>Pridaj to, čomu chceš venovať čas každý deň.</p>}</div> :
+    {!habits.length ? <div className="empty-state"><Icon name="habits" size={32} /><h2>{!spreadsheetId ? 'Pripoj svoju tabuľku' : hasLoaded ? 'Začni jedným návykom' : error ? 'Skús obnoviť svoje návyky' : 'Načítavam návyky…'}</h2>{!spreadsheetId ? <p>V nastaveniach vyber Google Sheet alebo vytvor nový.</p> : hasLoaded && <p>Pridaj to, čomu chceš venovať čas každý deň.</p>}</div> :
       <div ref={calendar} className="habit-calendar" tabIndex={0} aria-label="Habit calendar, scroll horizontally for more dates">
         <table className="habit-table">
           <caption className="sr-only">Daily habits, from {dateKey(dates[0])} to {dateKey(dates[dates.length - 1])}</caption>
