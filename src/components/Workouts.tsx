@@ -24,7 +24,10 @@ export function Workouts() {
   const setCount = entries.reduce((total, [, sets]) => total + sets.length, 0);
 
   return <main id="main-content" className="workouts-page">
-    <div className="page-heading"><div><h1>Workouts</h1><p className="page-description">Tvoj tréning, séria po sérii.</p></div><span className="page-symbol" aria-hidden="true"><Icon name="workouts" size={31} /></span></div>
+    <div className="page-heading">
+      <div><h1>Workouts</h1><p className="page-description">Tvoj tréning, séria po sérii.</p></div>
+      <button type="button" className="primary-button heading-action" disabled={!ready || busy} onClick={() => setEditor({})} aria-label="Pridať cvik"><Icon name="plus" size={19} /><span>Pridať cvik</span></button>
+    </div>
     <section aria-label="Výber tréningového dňa" className="workout-day">
       <div className="day-label"><label htmlFor="workout-date">Tréningový deň</label><button type="button" disabled={busy} onClick={() => setDate(dateKey(new Date()))} className="today-button" title="Prejsť na dnešný dátum"><Icon name="today" size={17} />Dnes</button></div>
       <div className="day-picker">
@@ -48,7 +51,6 @@ export function Workouts() {
         </table>
       </section>)}
     </div>
-    <div className="workout-add"><button disabled={!ready || busy} onClick={() => setEditor({})} className="primary-button"><Icon name="plus" size={20} />Pridať cvik</button></div>
     {managing && <ManageItemModal name={managing} kind="cvik" busy={busy} onClose={close}
       renameHelp="Nový názov sa použije vo všetkých dňoch. Série zostanú zachované."
       deleteHelp={`Vymažú sa všetky série tohto cviku z dňa ${date}. Záznamy v ostatných dňoch zostanú zachované.`} deleteLabel="Vymazať z tohto dňa"
