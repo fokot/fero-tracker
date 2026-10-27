@@ -1,3 +1,4 @@
+import { SyncStatus } from './SyncStatus';
 import { useEffect, useState } from 'react';
 import { dateKey, isDateKey } from '../lib/dates';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -7,7 +8,7 @@ import { EditableName } from './EditableName';
 import { ManageItemModal } from './ManageItemModal';
 
 export function Workouts() {
-  const { user, spreadsheetId, workouts, exercises, loadedDate, isLoading, pendingWrites, error, loadDay, saveExercise, renameExercise } = useWorkoutStore();
+  const { user, spreadsheetId, workouts, exercises, loadedDate, isLoading, pendingWrites, error, localKey, queuedWrites, syncError, syncedAt, loadDay, saveExercise, renameExercise } = useWorkoutStore();
   const [date, setDate] = useState(() => loadedDate ?? dateKey(new Date()));
   const [editor, setEditor] = useState<{ name?: string } | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
@@ -33,11 +34,11 @@ export function Workouts() {
       </div>
     </section>
     <div className="workout-toolbar">
-      <p role="status" aria-live="polite" className={`sync-status ${error ? 'has-error' : ''}`}><span className={`status-dot ${isLoading || busy ? 'is-pending' : ''}`} />{isLoading ? 'Načítavam…' : busy ? 'Ukladám…' : error ? 'Zápis zlyhal' : ready ? 'Uložené' : 'Pripájam…'}</p>
-      <div className="toolbar-actions">{spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Otvoriť Google Sheet"><Icon name="external" size={18} /></a>}<button disabled={busy || isLoading} onClick={() => void loadDay(date)} className="icon-button" aria-label="Obnoviť"><Icon name="refresh" size={18} /></button></div>
+      <SyncStatus {...{localKey, pendingWrites, queuedWrites, syncError, syncedAt}} ready={ready} />
+      <div className="toolbar-actions">{spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Otvoriť Google Sheet"><Icon name="external" size={18} /></a>}<button disabled={busy || isLoading} onClick={() => void loadDay(date, true)} className="icon-button" aria-label="Obnoviť"><Icon name="refresh" size={18} /></button></div>
     </div>
     {error && <p role="alert" className="error-banner">{error}</p>}
-    {ready && !!entries.length && <><div className="training-summary"><span><strong>{entries.length}</strong> {entries.length === 1 ? 'cvik' : entries.length < 5 ? 'cviky' : 'cvikov'}</span><span><strong>{setCount}</strong> {setCount === 1 ? 'séria' : setCount < 5 ? 'série' : 'sérií'}</span></div><p className="exercise-edit-hint"><span className="edit-hint-touch">Podrž názov cviku pre úpravu.</span><span className="edit-hint-mouse">Klikni na názov cviku pre úpravu.</span></p></>}
+    {ready && !!entries.length && <div className="training-summary"><span><strong>{entries.length}</strong> {entries.length === 1 ? 'cvik' : entries.length < 5 ? 'cviky' : 'cvikov'}</span><span><strong>{setCount}</strong> {setCount === 1 ? 'séria' : setCount < 5 ? 'série' : 'sérií'}</span></div>}
     {ready && !entries.length && <div className="empty-state workout-empty"><Icon name="workouts" size={36} /><h2>Deň čaká na tvoj tréning</h2><p>Pridaj prvý cvik a zapíš si série.</p></div>}
     <div className="exercise-list">
       {entries.map(([name, sets]) => <section key={name} aria-label={name} className="exercise">

@@ -1,16 +1,13 @@
 import { create } from 'zustand';
-import { loadHabitData, saveHabit, writeHabitValue, renameHabit, deleteHabit } from '../lib/googleSheets';
 import { errorMessage, type Habit, type HabitType, type HabitValues, type User } from '../lib/types';
+import { readLocal, subscribeLocal } from '../lib/localDatabase';
+import { enqueueLocal, ensureLocal, requestSync, synchronizeRecord } from '../lib/localSync';
+import { projectRecord, recordKey, type Change, type LocalRecord, type TrackerData } from '../lib/localModel';
 
 interface HabitStore {
-  user: User | null;
-  spreadsheetId: string | null;
-  habits: Habit[];
-  habitValues: HabitValues;
-  isLoading: boolean;
-  hasLoaded: boolean;
-  pendingWrites: number;
-  error: string | null;
+  user: User | null; spreadsheetId: string | null; habits: Habit[]; habitValues: HabitValues;
+  isLoading: boolean; hasLoaded: boolean; pendingWrites: number; error: string | null;
+  localKey: string | null; queuedWrites: number; syncError: string | null; syncedAt: number | null;
   setSession: (user: User, spreadsheetId: string | null) => void;
   clearUser: () => void;
   loadHabitsAndValues: (start: Date, end: Date) => Promise<void>;
@@ -20,120 +17,61 @@ interface HabitStore {
   toggleHabit: (name: string, date: string) => Promise<boolean>;
   setNumericValue: (name: string, date: string, value: string) => Promise<boolean>;
 }
-
+const emptyState = () => ({ user: null, spreadsheetId: null, habits: [], habitValues: {}, isLoading: false, hasLoaded: false, pendingWrites: 0, error: null, localKey: null, queuedWrites: 0, syncError: null, syncedAt: null });
 let sessionVersion = 0;
-let loadVersion = 0;
-let mutationQueue: Promise<unknown> = Promise.resolve();
-const emptyState = () => ({ user: null, spreadsheetId: null, habits: [], habitValues: {}, isLoading: false, hasLoaded: false, pendingWrites: 0, error: null });
-
-function remapValues(values: HabitValues, previousName: string, name?: string): HabitValues {
-  return Object.fromEntries(Object.entries(values).map(([date, entries]) => {
-    const next = { ...entries };
-    delete next[previousName];
-    if (name !== undefined && Object.prototype.hasOwnProperty.call(entries, previousName)) Object.defineProperty(next, name, { value: entries[previousName], enumerable: true, writable: true, configurable: true });
-    return [date, next];
-  }));
-}
+let unsubscribe: (() => void) | undefined;
+let publishedRevision = -1;
 
 export const useHabitStore = create<HabitStore>((set, get) => {
-  function mutate(operation: (id: string, isCurrent: () => boolean) => Promise<void>): Promise<boolean> {
-    const { spreadsheetId, isLoading, hasLoaded } = get();
-    if (!spreadsheetId || isLoading || !hasLoaded) return Promise.resolve(false);
-    const version = sessionVersion;
-    const isCurrent = () => version === sessionVersion;
+  const publish = (record: LocalRecord, version: number) => {
+    if (version !== sessionVersion || record.key !== get().localKey || (record.revision ?? 0) < publishedRevision) return;
+    const data = projectRecord(record); if (data.kind !== 'habits') return;
+    publishedRevision = record.revision ?? 0;
+    set({ habits: data.habits, habitValues: data.values, hasLoaded: record.initialized, isLoading: false, queuedWrites: record.operations.length, syncError: record.syncError, syncedAt: record.syncedAt });
+  };
+  const hydrate = async (version: number) => {
+    const { user, spreadsheetId } = get(); if (!user || !spreadsheetId) return;
+    try { const record = await ensureLocal(user.id, 'habits', spreadsheetId); publish(record, version); requestSync(record.key, 0); }
+    catch (error) { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }
+  };
+  const mutate = async (make: (data: TrackerData) => Change): Promise<boolean> => {
+    const key = get().localKey, version = sessionVersion;
+    if (!key || !get().hasLoaded) return false;
     set((state) => ({ pendingWrites: state.pendingWrites + 1, error: null }));
-    const next = mutationQueue.catch(() => {}).then(async () => {
-      if (!isCurrent()) return false;
-      try {
-        await operation(spreadsheetId, isCurrent);
-        return isCurrent();
-      } catch (error) {
-        if (isCurrent()) set({ error: errorMessage(error) });
-        return false;
-      } finally {
-        if (isCurrent()) set((state) => ({ pendingWrites: state.pendingWrites - 1 }));
-      }
-    });
-    mutationQueue = next;
-    return next;
-  }
-
-  function writeValue(name: string, date: string, value: string, isCurrent: () => boolean, id: string) {
-    return writeHabitValue(id, date, name, value).then(() => {
-      if (isCurrent()) set((state) => ({ habitValues: {
-        ...state.habitValues,
-        [date]: { ...state.habitValues[date], [name]: value },
-      } }));
-    });
-  }
-
+    try { const record = await enqueueLocal(key, make); publish(record, version); return version === sessionVersion; }
+    catch (error) { if (version === sessionVersion) set({ error: errorMessage(error) }); return false; }
+    finally { if (version === sessionVersion) set((state) => ({ pendingWrites: Math.max(0, state.pendingWrites - 1) })); }
+  };
   return {
     ...emptyState(),
     setSession: (user, spreadsheetId) => {
-      sessionVersion += 1;
-      loadVersion += 1;
-      mutationQueue = Promise.resolve();
-      set({ ...emptyState(), user, spreadsheetId });
+      const version = ++sessionVersion; unsubscribe?.(); publishedRevision = -1;
+      const key = spreadsheetId ? recordKey(user.id, 'habits', spreadsheetId) : null;
+      set({ ...emptyState(), user, spreadsheetId, localKey: key, isLoading: !!key });
+      unsubscribe = subscribeLocal((changed) => { if (changed === key) void readLocal(changed).then((record) => { if (record) publish(record, version); }).catch((error) => { if (version === sessionVersion) set({ error: errorMessage(error) }); }); });
+      void hydrate(version);
     },
-    clearUser: () => {
-      sessionVersion += 1;
-      loadVersion += 1;
-      mutationQueue = Promise.resolve();
-      set(emptyState());
+    clearUser: () => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; publishedRevision = -1; set(emptyState()); },
+    loadHabitsAndValues: async () => { const version = sessionVersion; await hydrate(version); if (version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true); },
+    addHabit: (name, type) => {
+      const habit: Habit = { id: crypto.randomUUID(), name: name.trim(), type };
+      return mutate(() => ({ type: 'habit-add', habit }));
     },
-    loadHabitsAndValues: async (start, end) => {
-      const { spreadsheetId, pendingWrites } = get();
-      if (!spreadsheetId || pendingWrites) return;
-      const session = sessionVersion, request = ++loadVersion;
-      const isCurrent = () => session === sessionVersion && request === loadVersion;
-      set({ isLoading: true, error: null });
-      try {
-        const { habits, values } = await loadHabitData(spreadsheetId, start, end);
-        if (!isCurrent()) return;
-        const habitValues: HabitValues = Object.create(null) as HabitValues;
-        for (const entry of values) {
-          if (!habitValues[entry.date]) habitValues[entry.date] = Object.create(null) as Record<string, string>;
-          habitValues[entry.date][entry.habitName] = entry.value;
-        }
-        set({ habits, habitValues, isLoading: false, hasLoaded: true });
-      } catch (error) {
-        if (isCurrent()) set({ error: errorMessage(error), isLoading: false });
-      }
+    renameHabit: (habitId, name) => mutate(() => ({ type: 'habit-rename', habitId, name })),
+    deleteHabit: (habitId) => mutate(() => ({ type: 'habit-delete', habitId })),
+    toggleHabit: (name, date) => {
+      const habitId = get().habits.find((habit) => habit.name === name && habit.type === 'boolean')?.id;
+      if (!habitId) return Promise.resolve(false);
+      return mutate((data) => {
+        if (data.kind !== 'habits') throw new Error('Neplatná tabuľka.');
+        const habit = data.habits.find((habit) => habit.id === habitId);
+        if (!habit) throw new Error('Návyk už neexistuje.');
+        return { type: 'habit-value', habitId, date, value: data.values[date]?.[habit.name] === '✓' ? '' : '✓' };
+      });
     },
-    addHabit: (name, type) => mutate(async (id, isCurrent) => {
-      const trimmed = name.trim();
-      if (!trimmed || trimmed.length > 100) throw new Error('Enter a habit name between 1 and 100 characters.');
-      if (get().habits.some((habit) => habit.name.toLowerCase() === trimmed.toLowerCase())) throw new Error('A habit with this name already exists.');
-      const habit: Habit = { id: crypto.randomUUID(), name: trimmed, type };
-      await saveHabit(id, habit);
-      if (isCurrent()) set((state) => ({ habits: [...state.habits, habit] }));
-    }),
-    renameHabit: (habitId, name) => mutate(async (id, isCurrent) => {
-      const habit = get().habits.find((entry) => entry.id === habitId);
-      if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
-      const updated = await renameHabit(id, habitId, name);
-      if (isCurrent()) set((state) => ({
-        habits: state.habits.map((entry) => entry.id === habitId ? updated : entry),
-        habitValues: remapValues(state.habitValues, habit.name, updated.name),
-      }));
-    }),
-    deleteHabit: (habitId) => mutate(async (id, isCurrent) => {
-      const habit = get().habits.find((entry) => entry.id === habitId);
-      if (!habit) throw new Error('Návyk už neexistuje. Obnov návyky.');
-      await deleteHabit(id, habitId);
-      if (isCurrent()) set((state) => ({ habits: state.habits.filter((entry) => entry.id !== habitId), habitValues: remapValues(state.habitValues, habit.name) }));
-    }),
-    toggleHabit: (name, date) => mutate(async (id, isCurrent) => {
-      if (!get().habits.some((habit) => habit.name === name && habit.type === 'boolean')) throw new Error('This habit cannot be toggled.');
-      const value = get().habitValues[date]?.[name] === '✓' ? '' : '✓';
-      await writeValue(name, date, value, isCurrent, id);
-    }),
-    setNumericValue: (name, date, input) => mutate(async (id, isCurrent) => {
-      if (!get().habits.some((habit) => habit.name === name && habit.type === 'numeric')) throw new Error('This habit does not accept numbers.');
-      const value = input.trim();
-      if (value !== '' && !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value)) throw new Error('Enter a valid number or leave the value empty.');
-      if (value !== '' && !Number.isFinite(Number(value))) throw new Error('Enter a finite number.');
-      await writeValue(name, date, value, isCurrent, id);
-    }),
+    setNumericValue: (name, date, value) => {
+      const habitId = get().habits.find((habit) => habit.name === name && habit.type === 'numeric')?.id;
+      return habitId ? mutate(() => ({ type: 'habit-value', habitId, date, value })) : Promise.resolve(false);
+    },
   };
 });

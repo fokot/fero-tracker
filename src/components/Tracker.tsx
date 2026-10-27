@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useHabitStore } from '../store/useHabitStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { HabitGrid } from './HabitGrid';
@@ -6,7 +6,7 @@ import { Workouts } from './Workouts';
 import { Icon } from './Icon';
 import { Settings } from './Settings';
 
-export function Tracker({ onSignOut }: { onSignOut: () => void }) {
+export function Tracker({ onSignOut, connection }: { onSignOut: () => void; connection?: ReactNode }) {
   const user = useHabitStore((state) => state.user);
   const habitWrites = useHabitStore((state) => state.pendingWrites);
   const workoutWrites = useWorkoutStore((state) => state.pendingWrites);
@@ -27,6 +27,7 @@ export function Tracker({ onSignOut }: { onSignOut: () => void }) {
         <button onClick={onSignOut} disabled={busy} className="icon-button sign-out" aria-label="Sign out" title="Odhlásiť sa"><Icon name="logout" size={18} /></button>
       </div>
     </header>
+    {connection}
     <nav aria-label="Sekcie trackera" className="app-nav">
       {(['habits', 'workouts'] as const).map((name) => <button key={name} onClick={() => { setTab(name); setSettingsOpen(false); }} disabled={busy} aria-current={!settingsOpen && tab === name ? 'page' : undefined} className={`nav-item ${!settingsOpen && tab === name ? 'is-active' : ''}`}>
         <Icon name={name} size={23} /><span>{name === 'habits' ? 'Habits' : 'Workouts'}</span>

@@ -19,7 +19,7 @@ export function createLoader({ globals = {}, mocks = {}, env = { VITE_GOOGLE_CLI
   const context = vm.createContext({
     console, Error, TypeError, setTimeout, clearTimeout, setInterval, clearInterval,
     TextEncoder, TextDecoder, atob, btoa, URL, URLSearchParams, AbortController,
-    crypto: globalThis.crypto, Event, ...globals,
+    crypto: globalThis.crypto, structuredClone, Event, ...globals,
   });
   function load(relative) {
     const file = path.resolve(root, relative);

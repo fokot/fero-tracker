@@ -136,15 +136,11 @@ button, a, input { scroll-margin-bottom: 100px; }
 .habit-cell.has-value { color: var(--accent); }
 .habit-cell:hover:not(:disabled) { background: #215be809; }
 .empty-mark { font-size: 20px; font-weight: 400; color: var(--empty-color); }
-.calendar-hint { margin: 0; padding: 12px var(--gutter); color: var(--muted); font-size: 11px; }
 .editable-name { display: flex; align-items: center; width: 100%; min-width: 0; min-height: 44px; text-align: left; font: inherit; color: inherit; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; border-radius: 6px; }
 .editable-name span { overflow-wrap: anywhere; min-width: 0; }
 .editable-name:hover:not(:disabled), .editable-name:focus-visible { color: var(--accent); }
 .habit-table tbody .habit-name { padding-block: 6px; }
 .habit-name .editable-name { font-size: 12px; line-height: 1.45; font-weight: 600; }
-.exercise-edit-hint { margin: -6px var(--gutter) 14px; font-size: 11px; color: var(--muted); }
-.edit-hint-touch { display: none; }
-@media (pointer: coarse) { .edit-hint-touch { display: inline; } .edit-hint-mouse { display: none; } }
 .manage-item-name { margin: 0 0 12px; font-weight: 650; overflow-wrap: anywhere; }
 .manage-delete { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line); }
 .delete-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--error); font-size: 13px; font-weight: 600; }
@@ -272,3 +268,20 @@ button, a, input { scroll-margin-bottom: 100px; }
   .editor-dialog { border-radius: 16px; margin: auto; width: calc(100% - 48px); inset: 0 0 var(--editor-bottom, 0px); max-height: calc(var(--editor-height, 100dvh) - 16px); }
   .sheet-handle { display: none; }
 }
+
+/* Local saves remain usable while the cloud catches up. */
+.connection-banner { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: 12px; }
+.connection-banner p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.connection-banner strong, .connection-banner span { display: block; }
+.connection-banner strong { color: var(--ink); margin-bottom: 3px; }
+.connection-banner .mt-4 { margin-top: 12px; }
+.connection-banner button { max-width: 320px; margin-inline: 0; }
+.sync-detail { min-width: 0; max-width: 64%; text-align: right; }
+.sync-detail .sync-status { white-space: normal; line-height: 1.5; justify-content: flex-end; text-align: right; }
+.sync-problem { font-size: 11px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+.sync-problem summary { cursor: pointer; color: var(--error); }
+.sync-problem p { margin-top: 7px; }
+.sync-problem .text-button { white-space: normal; }
+.habit-summary > p { flex-shrink: 0; }
+.local-queue-item { border-top: 1px solid var(--line); padding-block: 6px; }
+.local-queue-item .text-button { white-space: normal; display: inline-flex; align-items: center; }

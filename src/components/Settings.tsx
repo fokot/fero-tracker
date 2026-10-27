@@ -9,11 +9,16 @@ import { useHabitStore } from '../store/useHabitStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { Appearance } from './Appearance';
 import { Icon } from './Icon';
+import { canSynchronize } from '../lib/localSync';
+import { useSyncStore } from '../store/useSyncStore';
+import { LocalStorageSettings } from './LocalStorageSettings';
 
 export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
   const user = useHabitStore((state) => state.user)!;
   const habitId = useHabitStore((state) => state.spreadsheetId);
   const workoutId = useWorkoutStore((state) => state.spreadsheetId);
+  const { online, authorizedUserId } = useSyncStore();
+  const connected = online && authorizedUserId === user.id;
   const [current, setCurrent] = useState<Partial<Record<TrackerKind, SheetChoice>>>(() => readSheetChoices(user.id));
   const [chooser, setChooser] = useState<TrackerKind | null>(null);
   const [files, setFiles] = useState<SheetChoice[]>([]);
@@ -27,14 +32,15 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let cancelled = false;
-    for (const [kind, id] of [['habits', habitId], ['workouts', workoutId]] as const) if (id) {
+    for (const [kind, id] of [['habits', habitId], ['workouts', workoutId]] as const) if (id && canSynchronize(user.id)) {
       void getSpreadsheetInfo(id).then((file) => { if (!cancelled) setCurrent((state) => ({ ...state, [kind]: file })); }).catch(() => {});
     }
     return () => { cancelled = true; };
-  }, [habitId, workoutId]);
+  }, [habitId, workoutId, connected, user.id]);
 
   const run = async (kind: TrackerKind, action: (isCurrent: () => boolean) => Promise<void>) => {
     if (running.current || useHabitStore.getState().pendingWrites || useWorkoutStore.getState().pendingWrites) return;
+    if (!canSynchronize(user.id)) { setError('Na zmenu tabuľky sa pripoj na internet a prihlás cez Google.'); return; }
     running.current = true;
     const version = getAuthVersion();
     const isCurrent = () => alive.current && version === getAuthVersion() && useHabitStore.getState().user?.id === user.id;
@@ -54,8 +60,10 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
   return <main id="main-content" className="settings-page">
     <div className="page-heading"><div><h1>Nastavenia</h1><p className="page-description">Tvoj vzhľad a tvoje tabuľky.</p></div></div>
     <Appearance />
+    <LocalStorageSettings userId={user.id} />
     <section className="settings-section" aria-labelledby="sheets-title">
       <h2 id="sheets-title">Google Sheets</h2>
+      {!connected && <p className="field-help">Zmenu tabuľky sprístupní internet a prihlásenie cez Google. Lokálne záznamy môžeš upravovať ďalej.</p>}
       <p className="field-help">Pre návyky a tréningy máš samostatné tabuľky. Zmena pripojenia pôvodné dáta nevymaže ani nepresunie.</p>
       {(['habits', 'workouts'] as const).map((kind) => {
         const id = kind === 'habits' ? habitId : workoutId;

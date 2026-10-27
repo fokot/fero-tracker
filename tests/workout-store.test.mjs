@@ -1,141 +1,66 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLoader, deferred, plain } from './load-module.mjs';
-const user = { id: 'one', email: 'test@example.com' };
-const date = '2026-10-25';
-const sets = [{ reps: 5, weight: 100 }, { reps: 3, weight: 120 }];
-function setup(overrides = {}) {
-  const api = { getOrCreateWorkoutSheet: async () => 'workout-sheet', loadWorkoutDay: async () => ({ exercises: [], workouts: {} }), saveWorkoutSets: async (id, date, name) => name.trim(), renameWorkoutExercise:async(id,previous,name)=>name.trim(), ...overrides };
-  const { useWorkoutStore: store } = createLoader({ mocks: { '../lib/workoutSheets': api } })('src/store/useWorkoutStore.ts');
-  store.getState().setUser(user);
-  return store;
+import { plain, deferred } from './load-module.mjs';
+import { setupLocal, user, tick } from './local-fixture.mjs';
+const date = '2026-10-25', sets = [{ reps: 5, weight: 100 }, { reps: 3, weight: 120 }];
+async function setup(options = {}) {
+  const env = setupLocal(options), key = await env.seed('workouts');
+  const store = env.load('src/store/useWorkoutStore.ts').useWorkoutStore;
+  store.getState().setUser(user); store.getState().setSpreadsheet('workout-sheet'); await store.getState().loadDay(date);
+  return { ...env, store, key };
 }
-
-test('workout discovery is lazy and shared across concurrent first loads', async () => {
-  let discoveries = 0;
-  const gate = deferred();
-  const store = setup({ getOrCreateWorkoutSheet: () => { discoveries++; return gate.promise; } });
-  assert.equal(discoveries, 0);
-  const first = store.getState().loadDay('2026-10-24');
-  const second = store.getState().loadDay(date);
-  gate.resolve('workout-sheet');
-  await Promise.all([first, second]);
-  assert.equal(discoveries, 1);
-  assert.equal(store.getState().loadedDate, date);
+test('cached days switch immediately without network requests, with zero weights', async () => {
+  const { store, requests } = await setup();
+  assert.equal(store.getState().workouts.Drep[0].weight, 0);
+  await store.getState().loadDay('2026-10-26');
+  assert.equal(store.getState().workouts.Bench[0].weight, 120); assert.equal(requests.length, 0);
 });
-test('writes are blocked until the selected day is ready and failures preserve saved sets', async () => {
-  const store = setup({ saveWorkoutSets: async () => { throw new Error('Offline'); } });
-  assert.equal(await store.getState().saveExercise(date, 'Bench', sets), false);
-  await store.getState().loadDay(date);
-  store.setState({ workouts: { Bench: sets } });
+test('sets commit locally, use canonical names and are copied before awaiting', async () => {
+  const { store } = await setup(), input = structuredClone(sets);
+  const saving = store.getState().saveExercise(date, 'bench', input); input[0].weight = 999;
+  assert.equal(await saving, true);
+  assert.deepEqual(plain(store.getState().workouts.Bench), sets); assert.equal(store.getState().queuedWrites, 1);
+});
+test('deleting sets affects only the selected day and keeps the exercise suggestion', async () => {
+  const { store } = await setup();
+  assert.equal(await store.getState().saveExercise(date, 'Bench', []), true);
+  assert.deepEqual(Object.keys(store.getState().workouts), ['Drep']); assert.ok(store.getState().exercises.includes('Bench'));
+  await store.getState().loadDay('2026-10-26'); assert.equal(store.getState().workouts.Bench[0].weight, 120);
+});
+test('rename updates all cached days and survives reload while offline', async () => {
+  const env = await setup();
+  assert.equal(await env.store.getState().renameExercise(date, 'Bench', '__proto__'), true);
+  env.store.getState().clearUser();
+  const next = await setup({ database: env.database });
+  assert.equal(next.store.getState().workouts['__proto__'][0].weight, 100);
+  await next.store.getState().loadDay('2026-10-26'); assert.equal(next.store.getState().workouts['__proto__'][0].weight, 120);
+});
+test('disk failure, invalid sets and editing an unloaded date preserve saved workouts', async () => {
+  const { store, database } = await setup();
   assert.equal(await store.getState().saveExercise('2026-10-26', 'Bench', []), false);
-  assert.equal(await store.getState().saveExercise(date, 'Bench', []), false);
-  assert.deepEqual(plain(store.getState().workouts.Bench), sets);
-  assert.equal(store.getState().error, 'Offline');
-  assert.equal(store.getState().pendingWrites, 0);
+  assert.equal(await store.getState().saveExercise(date, 'New', []), false);
+  assert.equal(await store.getState().saveExercise(date, 'Bench', [{ reps: 0, weight: -1 }]), false);
+  database.fail(new Error('Storage full')); assert.equal(await store.getState().saveExercise(date, 'Bench', sets), false);
+  assert.equal(store.getState().workouts.Bench[0].weight, 100); assert.equal(store.getState().error, 'Storage full');
 });
-test('successful writes update the canonical exercise and empty sets remove only that day entry', async () => {
-  const store = setup({ saveWorkoutSets: async () => 'Bench press' });
-  await store.getState().loadDay(date);
-  assert.equal(await store.getState().saveExercise(date, 'bench press', sets), true);
-  assert.deepEqual(plain(store.getState().exercises), ['Bench press']);
-  assert.deepEqual(plain(store.getState().workouts['Bench press']), sets);
-  assert.equal(await store.getState().saveExercise(date, 'Bench press', []), true);
-  assert.deepEqual(plain(store.getState().workouts), {});
-  assert.deepEqual(plain(store.getState().exercises), ['Bench press']);
+test('lazy discovery is shared and cannot repopulate after sign-out', async () => {
+  const gate = deferred(); let calls = 0;
+  const env = setupLocal({ mocks: { '../lib/workoutSheets': { getOrCreateWorkoutSheet: () => { calls++; return gate.promise; } } } });
+  const store = env.load('src/store/useWorkoutStore.ts').useWorkoutStore;
+  store.getState().setUser(user); env.sync.authorizeSynchronization(user.id);
+  const first = store.getState().loadDay(date), second = store.getState().loadDay('2026-10-26');
+  assert.equal(calls, 1); store.getState().clearUser(); gate.resolve('workout-sheet'); await Promise.all([first, second]);
+  assert.equal(store.getState().spreadsheetId, null); env.sync.pauseSynchronization();
 });
-test('a late result from an earlier date never overwrites the selected date', async () => {
-  const firstDay = deferred(), nextDay = deferred();
-  const store = setup({ loadWorkoutDay: (id, day) => day === date ? firstDay.promise : nextDay.promise });
-  store.setState({ spreadsheetId: 'workout-sheet' });
-  const first = store.getState().loadDay(date);
-  const next = store.getState().loadDay('2026-10-26');
-  nextDay.resolve({ exercises: ['Drep'], workouts: { Drep: [{ reps: 3, weight: 80 }] } });
-  await next;
-  firstDay.resolve({ exercises: ['Bench'], workouts: { Bench: sets } });
-  await first;
-  assert.equal(store.getState().loadedDate, '2026-10-26');
-  assert.deepEqual(Object.keys(store.getState().workouts), ['Drep']);
+test('a sheet switch retains the queue in the original file and clears the current day', async () => {
+  const { store, database, key } = await setup();
+  await store.getState().saveExercise(date, 'Bench', sets);
+  store.getState().setSpreadsheet('replacement'); await tick();
+  assert.equal(store.getState().spreadsheetId, 'replacement'); assert.equal(store.getState().loadedDate, null);
+  assert.deepEqual(plain(store.getState().workouts), {}); assert.equal((await database.api.readLocal(key)).operations.length, 1);
 });
-test('sign-out invalidates pending discovery, loads, and writes', async () => {
-  const loading = deferred();
-  const store = setup({ loadWorkoutDay: () => loading.promise });
-  const load = store.getState().loadDay(date);
-  await Promise.resolve(); await Promise.resolve();
-  store.getState().clearUser();
-  loading.resolve({ exercises: ['Bench'], workouts: { Bench: sets } });
-  await load;
-  assert.equal(store.getState().user, null);
-  assert.deepEqual(plain(store.getState().workouts), {});
-
-  const saving = deferred();
-  const next = setup({ saveWorkoutSets: () => saving.promise });
-  await next.getState().loadDay(date);
-  const pending = next.getState().saveExercise(date, 'Bench', sets);
-  next.getState().clearUser();
-  saving.resolve('Bench');
-  assert.equal(await pending, false);
-  assert.equal(next.getState().pendingWrites, 0);
-  assert.deepEqual(plain(next.getState().workouts), {});
-});
-test('double submission is prevented and input sets are copied before awaiting', async () => {
-  const gate = deferred();
-  const store = setup({ saveWorkoutSets: () => gate.promise });
-  await store.getState().loadDay(date);
-  const input = [{ reps: 5, weight: 100 }];
-  const first = store.getState().saveExercise(date, 'Bench', input);
-  input[0].weight = 999;
-  assert.equal(await store.getState().saveExercise(date, 'Bench', sets), false);
-  gate.resolve('Bench');
-  assert.equal(await first, true);
-  assert.equal(store.getState().workouts.Bench[0].weight, 100);
-});
-test('discovery can retry and special exercise names are ordinary data keys', async () => {
-  let fail = true;
-  const store = setup({ getOrCreateWorkoutSheet: async () => { if (fail) throw new Error('Connection failed'); return 'workout-sheet'; } });
-  await store.getState().loadDay(date);
-  assert.equal(store.getState().error, 'Connection failed');
-  fail = false;
-  await store.getState().loadDay(date);
-  assert.equal(await store.getState().saveExercise(date, '__proto__', sets), true);
-  assert.deepEqual(plain(store.getState().workouts['__proto__']), sets);
-  assert.deepEqual(Object.keys(store.getState().workouts), ['__proto__']);
-});
-test('workout renaming retains sets and suggestions; deleting clears only the selected day entry', async () => {
-  const store=setup();
-  await store.getState().loadDay(date);
-  store.setState({exercises:['Bench','Drep'],workouts:{Bench:sets,Drep:[{reps:5,weight:80}]}});
-  assert.equal(await store.getState().renameExercise(date,'Bench','__proto__'),true);
-  assert.deepEqual(plain(store.getState().workouts['__proto__']),sets);
-  assert.deepEqual(plain(store.getState().exercises),['__proto__','Drep']);
-  assert.equal(await store.getState().saveExercise(date,'__proto__',[]),true);
-  assert.deepEqual(Object.keys(store.getState().workouts),['Drep']);
-  assert.deepEqual(plain(store.getState().exercises),['__proto__','Drep']);
-});
-test('failed and late workout renames preserve data or respect sign-out; concurrent edits are blocked', async () => {
-  const failed=setup({renameWorkoutExercise:async()=>{throw new Error('Offline');}});
-  await failed.getState().loadDay(date);
-  failed.setState({exercises:['Bench'],workouts:{Bench:sets}});
-  assert.equal(await failed.getState().renameExercise(date,'Bench','Tlaky'),false);
-  assert.deepEqual(plain(failed.getState().workouts),{Bench:sets});
-  assert.equal(failed.getState().error,'Offline');
-  assert.equal(await failed.getState().renameExercise('2026-10-26','Bench','Tlaky'),false);
-  const gate=deferred(),store=setup({renameWorkoutExercise:()=>gate.promise});
-  await store.getState().loadDay(date);
-  store.setState({exercises:['Bench'],workouts:{Bench:sets}});
-  const pending=store.getState().renameExercise(date,'Bench','Tlaky');
-  assert.equal(await store.getState().saveExercise(date,'Bench',[]),false);
-  assert.equal(await store.getState().renameExercise(date,'Bench','Other'),false);
-  store.getState().clearUser();
-  gate.resolve('Tlaky');
-  assert.equal(await pending,false);
-  assert.deepEqual(plain(store.getState().workouts),{});
-  assert.equal(store.getState().pendingWrites,0);
-});
-test('choosing a workout sheet invalidates old loads and never rediscovers another file',async()=>{
-  const gate=deferred();let discoveries=0;
-  const store=setup({getOrCreateWorkoutSheet:async()=>{discoveries++;return 'default';},loadWorkoutDay:()=>gate.promise});
-  store.getState().setSpreadsheet('selected');const pending=store.getState().loadDay(date);
-  store.getState().setSpreadsheet('replacement');gate.resolve({exercises:['Old'],workouts:{Old:sets}});await pending;
-  assert.equal(store.getState().spreadsheetId,'replacement');assert.equal(store.getState().loadedDate,null);assert.deepEqual(plain(store.getState().workouts),{});assert.equal(discoveries,0);
+test('offline first-time discovery asks for a connection instead of creating an empty editable sheet', async () => {
+  const env = setupLocal(), store = env.load('src/store/useWorkoutStore.ts').useWorkoutStore;
+  store.getState().setUser(user); await store.getState().loadDay(date);
+  assert.match(store.getState().error, /internet/); assert.equal(store.getState().loadedDate, null);
 });

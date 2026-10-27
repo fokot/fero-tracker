@@ -1,147 +1,93 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLoader, deferred, plain } from './load-module.mjs';
-
-const user = { id: 'one', email: 'test@example.com' };
-const habit = { id: 'run', name: 'Run', type: 'boolean' };
-function setup(overrides = {}) {
-  const api = { loadHabitData: async () => ({ habits: [habit], values: [] }), saveHabit: async () => {}, writeHabitValue: async () => {}, renameHabit: async (id,habitId,name)=>({...habit,id:habitId,name:name.trim()}), deleteHabit:async()=>{}, ...overrides };
-  const { useHabitStore: store } = createLoader({ mocks: { '../lib/googleSheets': api } })('src/store/useHabitStore.ts');
-  store.getState().setSession(user, 'sheet-1');
-  store.setState({ hasLoaded: true });
-  return store;
+import { plain, deferred } from './load-module.mjs';
+import { setupLocal, user, habitData, tick } from './local-fixture.mjs';
+const date = '2026-10-25', range = [new Date(), new Date()];
+async function setup(options = {}) {
+  const env = setupLocal(options); const key = await env.seed();
+  const store = env.load('src/store/useHabitStore.ts').useHabitStore;
+  store.getState().setSession(user, 'sheet-1'); await store.getState().loadHabitsAndValues(...range);
+  return { ...env, store, key };
 }
-const range = [new Date(2026, 9, 1, 12), new Date(2026, 9, 31, 12)];
-
-test('loading starts only with a ready sheet and retains persisted types', async () => {
-  const store = setup({ loadHabitData: async () => ({ habits: [{ ...habit, type: 'numeric' }], values: [] }) });
-  await store.getState().loadHabitsAndValues(...range);
-  assert.equal(store.getState().habits[0].type, 'numeric');
-  assert.equal(store.getState().isLoading, false);
+test('cached habits load with stable types without a Google authorization', async () => {
+  const { store, requests } = await setup();
+  assert.equal(store.getState().habits[1].type, 'numeric');
+  assert.equal(store.getState().hasLoaded, true); assert.equal(requests.length, 0);
 });
-test('failed initial loads block edits until the data has loaded successfully', async () => {
-  const store = setup({ loadHabitData: async () => { throw new Error('Unavailable'); } });
-  store.setState({ hasLoaded: false });
-  await store.getState().loadHabitsAndValues(...range);
-  assert.equal(store.getState().hasLoaded, false);
-  assert.equal(await store.getState().addHabit('Run', 'boolean'), false);
-  assert.equal(store.getState().habits.length, 0);
+test('rapid toggles use the last durable state and keep other dates', async () => {
+  const { store, database, key } = await setup();
+  assert.deepEqual(await Promise.all([
+    store.getState().toggleHabit('Run', date), store.getState().toggleHabit('Run', date), store.getState().toggleHabit('Run', '2026-10-26'),
+  ]), [true, true, true]);
+  assert.deepEqual(plain(store.getState().habitValues), { [date]: { Run: '' }, '2026-10-26': { Run: '✓' } });
+  assert.equal((await database.api.readLocal(key)).operations.length, 3);
+  assert.equal(store.getState().pendingWrites, 0); assert.equal(store.getState().queuedWrites, 3);
 });
-test('rapid toggles serialize and merge without losing edits on other dates', async () => {
-  const values = [], gate = deferred();
-  const store = setup({ writeHabitValue: async (id, date, name, value) => { values.push([date, value]); if (values.length === 1) await gate.promise; } });
-  store.setState({ habits: [habit] });
-  const first = store.getState().toggleHabit('Run', '2026-10-25');
-  const second = store.getState().toggleHabit('Run', '2026-10-25');
-  const third = store.getState().toggleHabit('Run', '2026-10-26');
-  await Promise.resolve();
-  gate.resolve();
-  assert.deepEqual(await Promise.all([first, second, third]), [true, true, true]);
-  assert.deepEqual(values, [['2026-10-25', '✓'], ['2026-10-25', ''], ['2026-10-26', '✓']]);
-  assert.deepEqual(plain(store.getState().habitValues), { '2026-10-25': { Run: '' }, '2026-10-26': { Run: '✓' } });
-  assert.equal(store.getState().pendingWrites, 0);
+test('disk failure preserves the last saved state and reports the actual failure', async () => {
+  const { store, database } = await setup();
+  database.fail(new Error('Storage full'));
+  assert.equal(await store.getState().toggleHabit('Run', date), false);
+  assert.deepEqual(plain(store.getState().habitValues), {}); assert.equal(store.getState().error, 'Storage full');
 });
-test('a failed write leaves existing nested state untouched and surfaces an error', async () => {
-  const saved = { '2026-10-25': { Run: '✓' } };
-  const store = setup({ writeHabitValue: async () => { throw new Error('Network unavailable'); } });
-  store.setState({ habits: [habit], habitValues: saved });
-  assert.equal(await store.getState().toggleHabit('Run', '2026-10-25'), false);
-  assert.equal(saved['2026-10-25'].Run, '✓');
-  assert.equal(store.getState().habitValues, saved);
-  assert.equal(store.getState().error, 'Network unavailable');
-  assert.equal(store.getState().pendingWrites, 0);
+test('network failure keeps a successful local edit and its queue', async () => {
+  const { store, sync, database, key } = await setup({ remote: { sendRemote: async () => { throw new Error('Offline'); } } });
+  sync.authorizeSynchronization(user.id);
+  assert.equal(await store.getState().toggleHabit('Run', date), true);
+  await sync.synchronizeRecord(key);
+  assert.equal(store.getState().habitValues[date].Run, '✓');
+  assert.equal((await database.api.readLocal(key)).operations.length, 1);
+  assert.equal(store.getState().syncError, 'Offline'); assert.equal(store.getState().error, null);
+  sync.pauseSynchronization();
 });
-test('old loads cannot restore data after sign-out or overwrite a newer account', async () => {
-  const gate = deferred();
-  const store = setup({ loadHabitData: () => gate.promise });
-  const pending = store.getState().loadHabitsAndValues(...range);
-  store.getState().clearUser();
-  store.getState().setSession({ id: 'two', email: 'two@example.com' }, 'sheet-2');
-  gate.resolve({ habits: [habit], values: [] });
-  await pending;
-  assert.equal(store.getState().user.id, 'two');
-  assert.equal(store.getState().habits.length, 0);
+test('a reload restores queued values and schema changes, without a token', async () => {
+  const first = await setup();
+  await first.store.getState().renameHabit('run', 'Walk');
+  await first.store.getState().toggleHabit('Walk', date);
+  first.store.getState().clearUser();
+  const second = await setup({ database: first.database });
+  assert.equal(second.store.getState().habits[0].name, 'Walk');
+  assert.equal(second.store.getState().habitValues[date].Walk, '✓'); assert.equal(second.requests.length, 0);
+  assert.equal(second.store.getState().queuedWrites, 2);
 });
-test('old writes and queued operations cannot restore a cleared session', async () => {
-  const gate = deferred();
-  let count = 0;
-  const store = setup({ writeHabitValue: async () => { count++; await gate.promise; } });
-  store.setState({ habits: [habit] });
-  const first = store.getState().toggleHabit('Run', '2026-10-25');
-  const queued = store.getState().toggleHabit('Run', '2026-10-26');
-  await Promise.resolve(); await Promise.resolve();
-  store.getState().clearUser();
-  gate.resolve();
-  assert.deepEqual(await Promise.all([first, queued]), [false, false]);
-  assert.equal(count, 1);
-  assert.equal(store.getState().user, null);
-  assert.deepEqual(plain(store.getState().habitValues), {});
-  assert.equal(store.getState().pendingWrites, 0);
+test('late hydration and commits cannot repopulate a different account', async () => {
+  const env = await setup();
+  const pending = env.store.getState().toggleHabit('Run', date);
+  env.store.getState().setSession({ id: 'two', email: 'two@example.com' }, 'sheet-2');
+  await pending; await tick();
+  assert.equal(env.store.getState().user.id, 'two'); assert.equal(env.store.getState().habits.length, 0);
+  assert.equal(env.store.getState().queuedWrites, 0);
+  assert.equal((await env.database.api.readLocal(env.key)).operations.length, 1);
 });
-test('adding rejects blank or duplicate names and keeps failures out of local state', async () => {
-  const store = setup({ saveHabit: async () => { throw new Error('Failed to save'); } });
-  store.setState({ habits: [habit] });
-  assert.equal(await store.getState().addHabit('   ', 'boolean'), false);
-  assert.equal(await store.getState().addHabit('run', 'numeric'), false);
-  assert.equal(await store.getState().addHabit('Read', 'numeric'), false);
-  assert.equal(store.getState().habits.length, 1);
-  assert.equal(store.getState().error, 'Failed to save');
+test('invalid names, dates, values and wrong habit types never enter the queue', async () => {
+  const { store, database, key } = await setup();
+  for (const name of ['', ' run ', 'x'.repeat(101)]) assert.equal(await store.getState().addHabit(name, 'boolean'), false);
+  for (const value of ['Infinity', 'abc']) assert.equal(await store.getState().setNumericValue('Read', date, value), false);
+  assert.equal(await store.getState().setNumericValue('Run', date, '5'), false);
+  assert.equal(await store.getState().toggleHabit('Read', date), false);
+  assert.equal(await store.getState().toggleHabit('Run', 'not-a-date'), false);
+  assert.equal((await database.api.readLocal(key)).operations.length, 0);
+  assert.equal(await store.getState().setNumericValue('Read', date, '0'), true);
+  assert.equal(await store.getState().setNumericValue('Read', date, ''), true);
 });
-test('numeric edits accept zero and clearing, reject invalid numbers and boolean habits', async () => {
-  const writes = [];
-  const store = setup({ writeHabitValue: async (...args) => { writes.push(args); } });
-  store.setState({ habits: [{ ...habit, name: 'Read', type: 'numeric' }] });
-  assert.equal(await store.getState().setNumericValue('Read', '2026-10-25', '0'), true);
-  assert.equal(await store.getState().setNumericValue('Read', '2026-10-25', ''), true);
-  assert.equal(await store.getState().setNumericValue('Read', '2026-10-25', 'Infinity'), false);
-  assert.equal(await store.getState().setNumericValue('Read', '2026-10-25', 'abc'), false);
-  assert.equal(await store.getState().toggleHabit('Read', '2026-10-25'), false);
-  assert.equal(writes.length, 2);
+test('rename and delete preserve every other habit and zero, including special names', async () => {
+  const { store } = await setup();
+  await store.getState().setNumericValue('Read', date, '0'); await store.getState().toggleHabit('Run', date);
+  assert.equal(await store.getState().renameHabit('run', '__proto__'), true);
+  assert.equal(store.getState().habitValues[date]['__proto__'], '✓');
+  assert.equal(await store.getState().deleteHabit('run'), true);
+  assert.deepEqual(plain(store.getState().habitValues), { [date]: { Read: '0' } });
 });
-test('special habit names remain ordinary data keys', async () => {
-  const store = setup();
-  store.setState({ habits: [{ ...habit, name: '__proto__' }] });
-  assert.equal(await store.getState().toggleHabit('__proto__', '2026-10-25'), true);
-  assert.equal(store.getState().habitValues['2026-10-25']['__proto__'], '✓');
+test('first-time sheets cannot be edited until a remote snapshot is available', async () => {
+  const env = setupLocal(), store = env.load('src/store/useHabitStore.ts').useHabitStore;
+  store.getState().setSession(user, 'unknown'); await store.getState().loadHabitsAndValues(...range);
+  assert.equal(store.getState().hasLoaded, false); assert.equal(await store.getState().addHabit('New', 'boolean'), false);
+  env.sync.authorizeSynchronization(user.id); await env.sync.synchronizeRecord(store.getState().localKey);
+  assert.equal(store.getState().hasLoaded, true);
+  assert.deepEqual(plain(store.getState().habits), habitData.habits); env.sync.pauseSynchronization();
 });
-test('rename and delete move only the chosen habit values and preserve zero, blanks and other dates', async () => {
-  const store=setup();
-  store.setState({habits:[habit,{id:'read',name:'Read',type:'numeric'}],habitValues:{'2026-10-25':{Run:'✓',Read:'0'},'2026-10-26':{Run:'',Read:'24'}}});
-  assert.equal(await store.getState().renameHabit('run','__proto__'),true);
-  assert.deepEqual(plain(store.getState().habitValues),{'2026-10-25':{['__proto__']:'✓',Read:'0'},'2026-10-26':{['__proto__']:'',Read:'24'}});
-  assert.equal(await store.getState().deleteHabit('run'),true);
-  assert.deepEqual(plain(store.getState().habits),[{id:'read',name:'Read',type:'numeric'}]);
-  assert.deepEqual(plain(store.getState().habitValues),{'2026-10-25':{Read:'0'},'2026-10-26':{Read:'24'}});
-});
-test('failed habit management preserves local data and late results cannot restore a signed-out account', async () => {
-  for(const action of ['renameHabit','deleteHabit']) {
-    const failed=setup({[action]:async()=>{throw new Error('Offline');}});
-    failed.setState({habits:[habit],habitValues:{'2026-10-25':{Run:'✓'}}});
-    assert.equal(await failed.getState()[action]('run','Walk'),false);
-    assert.deepEqual(plain(failed.getState().habits),[habit]);
-    assert.equal(failed.getState().habitValues['2026-10-25'].Run,'✓');
-    assert.equal(failed.getState().error,'Offline');
-    const gate=deferred(), store=setup({[action]:()=>gate.promise});
-    store.setState({habits:[habit]});
-    const pending=store.getState()[action]('run','Walk');
-    await Promise.resolve();await Promise.resolve();
-    store.getState().clearUser();
-    gate.resolve({...habit,name:'Walk'});
-    assert.equal(await pending,false);
-    assert.deepEqual(plain(store.getState().habits),[]);
-    assert.equal(store.getState().pendingWrites,0);
-  }
-});
-test('a queued habit rename follows pending value writes and deletion prevents later edits', async () => {
-  const gate=deferred(),calls=[];
-  const store=setup({writeHabitValue:async(...args)=>{calls.push(args);await gate.promise;}});
-  store.setState({habits:[habit]});
-  const value=store.getState().toggleHabit('Run','2026-10-25');
-  const rename=store.getState().renameHabit('run','Walk');
-  gate.resolve();
-  assert.deepEqual(await Promise.all([value,rename]),[true,true]);
-  assert.equal(store.getState().habitValues['2026-10-25'].Walk,'✓');
-  assert.equal(await store.getState().deleteHabit('run'),true);
-  assert.equal(await store.getState().toggleHabit('Walk','2026-10-25'),false);
-  assert.equal(calls.length,1);
+test('another tab publishes newer committed revisions into the current view', async () => {
+  const { store, database, key, model } = await setup();
+  await database.api.updateLocal(key, record => ({ ...record, operations: [{id:'other-tab',change:{type:'habit-value',habitId:'run',date,value:'✓'}}] }));
+  await tick(); assert.equal(store.getState().habitValues[date].Run, '✓');
+  assert.equal(model.projectRecord(await database.api.readLocal(key)).values[date].Run, '✓');
 });

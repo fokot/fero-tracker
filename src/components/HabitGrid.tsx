@@ -1,3 +1,4 @@
+import { SyncStatus } from './SyncStatus';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useHabitStore } from '../store/useHabitStore';
 import { dateKey, visibleDates } from '../lib/dates';
@@ -9,7 +10,7 @@ import { ManageItemModal } from './ManageItemModal';
 
 export function HabitGrid() {
   const { habits, habitValues, toggleHabit, setNumericValue, spreadsheetId,
-    loadHabitsAndValues, addHabit, renameHabit, deleteHabit, isLoading, hasLoaded, pendingWrites, error } = useHabitStore();
+    loadHabitsAndValues, addHabit, renameHabit, deleteHabit, isLoading, hasLoaded, pendingWrites, error, localKey, queuedWrites, syncError, syncedAt } = useHabitStore();
   const [today, setToday] = useState(() => dateKey(new Date()));
   const dates = useMemo(() => {
     const [year, month, day] = today.split('-').map(Number);
@@ -28,7 +29,6 @@ export function HabitGrid() {
   const syncing = isLoading || pendingWrites > 0;
   const busy = syncing || !hasLoaded;
   const completed = habits.filter((habit) => !!habitValues[today]?.[habit.name]).length;
-  const status = isLoading ? 'Načítavam…' : pendingWrites ? 'Ukladám…' : error ? 'Zápis zlyhal' : hasLoaded ? 'Uložené' : 'Pripájam…';
 
   const showToday = (smooth = false) => {
     const element = calendar.current;
@@ -81,7 +81,7 @@ export function HabitGrid() {
     </div>
     <div className="habit-summary">
       <p><strong>{completed}<span>/{habits.length}</span></strong><span> dnes zaznamenané</span></p>
-      <span role="status" aria-live="polite" className={`sync-status ${error ? 'has-error' : ''}`}><span className={`status-dot ${syncing ? 'is-pending' : ''}`} />{status}</span>
+      <SyncStatus {...{localKey, pendingWrites, queuedWrites, syncError, syncedAt}} ready={hasLoaded} />
     </div>
     <div className="calendar-toolbar">
       <div className="calendar-period"><strong>{dates[30].toLocaleDateString('sk-SK', { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title="Prejsť na dnešný dátum"><Icon name="today" size={17} />Dnes</button></div>
@@ -118,7 +118,6 @@ export function HabitGrid() {
           </tr>)}</tbody>
         </table>
       </div>}
-    {!!habits.length && <p className="calendar-hint">Posunutím do strán zobrazíš ďalšie dni. <span className="edit-hint-touch">Podrž názov návyku pre úpravu.</span><span className="edit-hint-mouse">Klikni na názov návyku pre úpravu.</span></p>}
     {managingHabit && <ManageItemModal name={managingHabit.name} kind="návyk" busy={syncing} onClose={close}
       renameHelp="Nový názov sa použije vo všetkých dňoch. Záznamy zostanú zachované."
       deleteHelp="Vymaže sa tento návyk aj všetky jeho záznamy zo všetkých dní. Ostatné návyky zostanú zachované." deleteLabel="Vymazať návyk"

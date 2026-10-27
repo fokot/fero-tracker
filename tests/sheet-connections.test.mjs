@@ -19,7 +19,12 @@ test('file inspection refuses non-sheets, trash and read-only files and creation
 
 function switchSetup(prepare=async()=>{}) {
   const values=new Map();let version=0;
-  const load=createLoader({globals:{localStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)}},mocks:{'./sheetConnections':{prepareSheetConnection:prepare},'./googleOAuth':{getAuthVersion:()=>version}}});
+  const load=createLoader({globals:{localStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)}},mocks:{
+    './sheetConnections':{prepareSheetConnection:prepare},'./googleOAuth':{getAuthVersion:()=>version},
+    './localSync':{canSynchronize:()=>true}, './remoteSync':{invalidateRemote:()=>{}},
+    '../lib/localSync':{ensureLocal:()=>new Promise(()=>{}),requestSync:()=>{}},
+    '../lib/localDatabase':{subscribeLocal:()=>()=>{}},
+  }});
   const habits=load('src/store/useHabitStore.ts').useHabitStore,workouts=load('src/store/useWorkoutStore.ts').useWorkoutStore;
   const user={id:'user',email:'test@example.com'};
   habits.getState().setSession(user,'old-habits');habits.setState({hasLoaded:true,habits:[{id:'one',name:'Run',type:'boolean'}]});

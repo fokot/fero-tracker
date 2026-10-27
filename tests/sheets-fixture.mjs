@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { createLoader, plain } from './load-module.mjs';
 
 const marker = { metadataKey: 'feros-tracker-layout', metadataValue: 'date-rows-v1' };
-export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], legacy = false, existing = 'sheet-1', failDrive = false, failBatch = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
+export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], legacy = false, existing = 'sheet-1', failDrive = false, failBatch = false, loseBatchResponse = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
   const calls = [];
   let version = 0;
+  let responseLost = false;
   const tab = (sheetId, title, rows, columnCount = 26) => ({ properties: { sheetId, title, gridProperties: { columnCount, rowCount } }, rows: plain(rows) });
   let tabs = [tab(0,sheetName,rows,columns), ...extraTabs];
   if (!legacy) tabs[0].developerMetadata = [marker];
@@ -28,6 +29,7 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       const props=request.addSheet.properties;
       assert.ok(!state.some((sheet)=>sheet.properties.sheetId===props.sheetId || sheet.properties.title===props.title));
       state.push(tab(props.sheetId,props.title,[],props.gridProperties?.columnCount??26));
+      if(props.hidden) state.at(-1).properties.hidden=true;
       if(props.gridProperties) Object.assign(state.at(-1).properties.gridProperties,props.gridProperties);
     } else if(request.updateCells) {
       const update=request.updateCells, position=update.start??update.range;
@@ -88,12 +90,18 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       if(failBatch) throw new Error('Simulated batch failure');
       const copy=plain(tabs);
       for(const update of body.requests) apply(copy,update);
-      tabs=copy;return {};
+      tabs=copy;
+      if(loseBatchResponse && !responseLost) { responseLost=true; throw new Error('Response lost after commit'); }
+      return {};
     }
     if(path.includes('/values/')) {
       const name=path.split('/values/')[1].split('!')[0].replaceAll("'",'');
       const target=tabs.find((sheet)=>sheet.properties.title===name);assert.ok(target,`Missing range ${name}`);
       return {values:plain(target.rows)};
+    }
+    if(parsed.searchParams.get('fields')?.includes('data(')) {
+      const names=parsed.searchParams.getAll('ranges').map(name=>name.replaceAll("'",''));
+      return {sheets:plain(tabs.filter(tab=>names.includes(tab.properties.title)).map(({rows,...metadata})=>({...metadata,data:[{rowData:rows.map(row=>({values:row.map(value=>({formattedValue:value,userEnteredValue:{stringValue:value}}))}))}]})))};
     }
     return {spreadsheetId:'sheet-1',sheets:plain(tabs.map(({rows,...metadata})=>metadata))};
   };

@@ -1,119 +1,82 @@
 import { create } from 'zustand';
-import { getOrCreateWorkoutSheet, loadWorkoutDay, saveWorkoutSets, renameWorkoutExercise } from '../lib/workoutSheets';
+import { getOrCreateWorkoutSheet } from '../lib/workoutSheets';
 import { errorMessage, type User } from '../lib/types';
 import { isDateKey } from '../lib/dates';
-import { validateWorkoutSets, type DayWorkouts, type WorkoutSet } from '../lib/workouts';
+import type { DayWorkouts, WorkoutSet } from '../lib/workouts';
+import { readLocal, subscribeLocal } from '../lib/localDatabase';
+import { enqueueLocal, ensureLocal, requestSync, synchronizeRecord } from '../lib/localSync';
+import { projectRecord, recordKey, type Change, type LocalRecord } from '../lib/localModel';
+import { useSyncStore } from './useSyncStore';
 
 interface WorkoutStore {
-  user: User | null;
-  spreadsheetId: string | null;
-  exercises: string[];
-  workouts: DayWorkouts;
-  loadedDate: string | null;
-  isLoading: boolean;
-  pendingWrites: number;
-  error: string | null;
-  setUser: (user: User) => void;
-  setSpreadsheet: (id: string) => void;
-  clearUser: () => void;
-  loadDay: (date: string) => Promise<void>;
+  user: User | null; spreadsheetId: string | null; exercises: string[]; workouts: DayWorkouts;
+  loadedDate: string | null; isLoading: boolean; pendingWrites: number; error: string | null;
+  localKey: string | null; queuedWrites: number; syncError: string | null; syncedAt: number | null;
+  setUser: (user: User) => void; setSpreadsheet: (id: string) => void; clearUser: () => void;
+  loadDay: (date: string, refresh?: boolean) => Promise<void>;
   saveExercise: (date: string, name: string, sets: WorkoutSet[]) => Promise<boolean>;
   renameExercise: (date: string, previousName: string, name: string) => Promise<boolean>;
 }
+const emptyState = () => ({ user: null, spreadsheetId: null, exercises: [], workouts: {}, loadedDate: null, isLoading: false, pendingWrites: 0, error: null, localKey: null, queuedWrites: 0, syncError: null, syncedAt: null });
+let sessionVersion = 0, publishedRevision = -1;
+let viewDate: string | null = null;
+let unsubscribe: (() => void) | undefined;
+let discovery: Promise<string> | null = null;
 
-let sessionVersion = 0;
-let loadVersion = 0;
-let discovery: { version: number; promise: Promise<string> } | null = null;
-const emptyState = () => ({ user: null, spreadsheetId: null, exercises: [], workouts: {}, loadedDate: null, isLoading: false, pendingWrites: 0, error: null });
-
-export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
-  ...emptyState(),
-  setUser: (user) => {
-    sessionVersion++;
-    loadVersion++;
-    discovery = null;
-    set({ ...emptyState(), user });
-  },
-  clearUser: () => {
-    sessionVersion++;
-    loadVersion++;
-    discovery = null;
-    set(emptyState());
-  },
-  setSpreadsheet: (spreadsheetId) => {
-    if (get().pendingWrites) return;
-    sessionVersion++;
-    loadVersion++;
-    discovery = null;
-    set({ ...emptyState(), user: get().user, spreadsheetId });
-  },
-  loadDay: async (date) => {
-    const { user, pendingWrites } = get();
-    if (!user || pendingWrites) return;
-    const session = sessionVersion, request = ++loadVersion;
-    const isCurrent = () => session === sessionVersion && request === loadVersion;
-    if (!isDateKey(date)) { set({ error: 'Vyber platný dátum.' }); return; }
-    set({ isLoading: true, error: null });
-    try {
-      let id = get().spreadsheetId;
-      if (!id) {
-        if (!discovery || discovery.version !== session) discovery = { version: session, promise: getOrCreateWorkoutSheet(user.email) };
-        const pending = discovery;
-        try { id = await pending.promise; }
-        finally { if (discovery === pending) discovery = null; }
-        if (!isCurrent()) return;
-        set({ spreadsheetId: id });
-      }
-      const result = await loadWorkoutDay(id, date);
-      if (isCurrent()) set({ ...result, loadedDate: date, isLoading: false });
-    } catch (error) {
-      if (isCurrent()) set({ error: errorMessage(error), isLoading: false });
-    }
-  },
-  saveExercise: async (date, name, sets) => {
-    const { spreadsheetId, loadedDate, isLoading, pendingWrites } = get();
-    if (!spreadsheetId || loadedDate !== date || isLoading || pendingWrites) return false;
-    const session = sessionVersion;
-    const isCurrent = () => session === sessionVersion;
-    const savedSets = sets.map((entry) => ({ ...entry }));
-    set({ pendingWrites: 1, error: null });
-    try {
-      validateWorkoutSets(savedSets);
-      const canonical = await saveWorkoutSets(spreadsheetId, date, name, savedSets);
-      if (!isCurrent()) return false;
-      set((state) => {
-        const workouts: DayWorkouts = Object.assign(Object.create(null) as DayWorkouts, state.workouts);
-        if (savedSets.length) workouts[canonical] = savedSets;
-        else delete workouts[canonical];
-        return { workouts, exercises: state.exercises.includes(canonical) ? state.exercises : [...state.exercises, canonical] };
-      });
-      return true;
-    } catch (error) {
-      if (isCurrent()) set({ error: errorMessage(error) });
-      return false;
-    } finally {
-      if (isCurrent()) set({ pendingWrites: 0 });
-    }
-  },
-  renameExercise: async (date, previousName, name) => {
-    const { spreadsheetId, loadedDate, isLoading, pendingWrites, workouts } = get();
-    if (!spreadsheetId || loadedDate !== date || isLoading || pendingWrites) return false;
-    const session = sessionVersion;
-    if (!Object.prototype.hasOwnProperty.call(workouts, previousName)) { set({ error: 'Cvik v tomto dni už neexistuje.' }); return false; }
-    set({ pendingWrites: 1, error: null });
-    try {
-      const canonical = await renameWorkoutExercise(spreadsheetId, previousName, name);
-      if (session !== sessionVersion) return false;
-      set((state) => ({
-        exercises: state.exercises.map((entry) => entry === previousName ? canonical : entry),
-        workouts: Object.fromEntries(Object.entries(state.workouts).map(([entry, sets]) => [entry === previousName ? canonical : entry, sets])),
-      }));
-      return true;
-    } catch (error) {
-      if (session === sessionVersion) set({ error: errorMessage(error) });
-      return false;
-    } finally {
-      if (session === sessionVersion) set({ pendingWrites: 0 });
-    }
-  },
-}));
+export const useWorkoutStore = create<WorkoutStore>((set, get) => {
+  const publish = (record: LocalRecord, version: number) => {
+    if (version !== sessionVersion || record.key !== get().localKey || (record.revision ?? 0) < publishedRevision) return;
+    const data = projectRecord(record); if (data.kind !== 'workouts') return;
+    publishedRevision = record.revision ?? 0;
+    set({ exercises: data.exercises, workouts: viewDate ? data.days[viewDate] ?? {} : {}, loadedDate: record.initialized ? viewDate : null, isLoading: false, queuedWrites: record.operations.length, syncError: record.syncError, syncedAt: record.syncedAt });
+  };
+  const attach = (id: string) => {
+    const user = get().user; if (!user) return;
+    const version = ++sessionVersion; unsubscribe?.(); publishedRevision = -1;
+    const key = recordKey(user.id, 'workouts', id);
+    set({ ...emptyState(), user, spreadsheetId: id, localKey: key, isLoading: true });
+    unsubscribe = subscribeLocal((changed) => { if (changed === key) void readLocal(key).then((record) => { if (record) publish(record, version); }).catch((error) => { if (version === sessionVersion) set({ error: errorMessage(error) }); }); });
+  };
+  const hydrate = async (version: number) => {
+    const { user, spreadsheetId } = get(); if (!user || !spreadsheetId) return;
+    const record = await ensureLocal(user.id, 'workouts', spreadsheetId); publish(record, version); requestSync(record.key, 0);
+  };
+  const mutate = async (date: string, change: Change): Promise<boolean> => {
+    const { localKey, loadedDate } = get(), version = sessionVersion;
+    if (!localKey || loadedDate !== date) return false;
+    set((state) => ({ pendingWrites: state.pendingWrites + 1, error: null }));
+    try { const record = await enqueueLocal(localKey, () => change); publish(record, version); return version === sessionVersion; }
+    catch (error) { if (version === sessionVersion) set({ error: errorMessage(error) }); return false; }
+    finally { if (version === sessionVersion) set((state) => ({ pendingWrites: Math.max(0, state.pendingWrites - 1) })); }
+  };
+  return {
+    ...emptyState(),
+    setUser: (user) => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; discovery = null; viewDate = null; publishedRevision = -1; set({ ...emptyState(), user }); },
+    clearUser: () => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; discovery = null; viewDate = null; publishedRevision = -1; set(emptyState()); },
+    setSpreadsheet: (id) => {
+      if (!get().pendingWrites) { viewDate = null; attach(id); const version = sessionVersion; void hydrate(version).catch((error) => { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }); }
+    },
+    loadDay: async (date, refresh = false) => {
+      if (!isDateKey(date)) { set({ error: 'Vyber platný dátum.' }); return; }
+      viewDate = date; const original = sessionVersion; let version = original;
+      const user = get().user; if (!user) return;
+      try {
+        if (!get().spreadsheetId) {
+          if (!useSyncStore.getState().online || useSyncStore.getState().authorizedUserId !== user.id) { set({ error: 'Prvé pripojenie tréningovej tabuľky vyžaduje internet a prihlásenie.', isLoading: false }); return; }
+          set({ isLoading: true, error: null });
+          discovery ??= getOrCreateWorkoutSheet(user.email);
+          const pending = discovery;
+          let id: string;
+          try { id = await pending; } finally { if (discovery === pending) discovery = null; }
+          if (original !== sessionVersion) return;
+          if (!get().spreadsheetId) attach(id);
+        }
+        version = sessionVersion;
+        await hydrate(version);
+        if (refresh && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true);
+      } catch (error) { if (version === sessionVersion && get().user?.id === user.id) set({ error: errorMessage(error), isLoading: false }); }
+    },
+    saveExercise: (date, name, sets) => mutate(date, { type: 'workout-sets', date, name, sets: sets.map((set) => ({ ...set })) }),
+    renameExercise: (date, previousName, name) => mutate(date, { type: 'workout-rename', previousName, name }),
+  };
+});
