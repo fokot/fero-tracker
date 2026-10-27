@@ -64,3 +64,9 @@ test('offline first-time discovery asks for a connection instead of creating an 
   store.getState().setUser(user); await store.getState().loadDay(date);
   assert.match(store.getState().error, /internet/); assert.equal(store.getState().loadedDate, null);
 });
+test('switching cached workout days keeps using local history even after an hour',async()=>{
+  const {store,sync,requests,database,key}=await setup();await database.api.updateLocal(key,record=>({...record,syncedAt:Date.now()-3600000}));
+  sync.authorizeSynchronization(user.id,[]);await tick();
+  await store.getState().loadDay('2026-10-26');await sync.synchronizeRecord(key);assert.equal(requests.length,0);assert.equal(store.getState().workouts.Bench[0].weight,120);
+  await store.getState().loadDay('2026-10-26',true);assert.equal(requests.length,1);sync.pauseSynchronization();
+});

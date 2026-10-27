@@ -20,8 +20,8 @@ test('rapid toggles use the last durable state and keep other dates', async () =
     store.getState().toggleHabit('Run', date), store.getState().toggleHabit('Run', date), store.getState().toggleHabit('Run', '2026-10-26'),
   ]), [true, true, true]);
   assert.deepEqual(plain(store.getState().habitValues), { [date]: { Run: '' }, '2026-10-26': { Run: '✓' } });
-  assert.equal((await database.api.readLocal(key)).operations.length, 3);
-  assert.equal(store.getState().pendingWrites, 0); assert.equal(store.getState().queuedWrites, 3);
+  assert.equal((await database.api.readLocal(key)).operations.length, 2);
+  assert.equal(store.getState().pendingWrites, 0); assert.equal(store.getState().queuedWrites, 2);
 });
 test('disk failure preserves the last saved state and reports the actual failure', async () => {
   const { store, database } = await setup();
@@ -90,4 +90,10 @@ test('another tab publishes newer committed revisions into the current view', as
   await database.api.updateLocal(key, record => ({ ...record, operations: [{id:'other-tab',change:{type:'habit-value',habitId:'run',date,value:'✓'}}] }));
   await tick(); assert.equal(store.getState().habitValues[date].Run, '✓');
   assert.equal(model.projectRecord(await database.api.readLocal(key)).values[date].Run, '✓');
+});
+test('reentering cached habits uses local data, and the refresh button path reads Google explicitly',async()=>{
+  const {store,sync,requests,database,key}=await setup();await database.api.updateLocal(key,record=>({...record,syncedAt:Date.now()-3600000}));
+  sync.authorizeSynchronization(user.id,[]);await tick();
+  await store.getState().loadHabitsAndValues(...range);await sync.synchronizeRecord(key);assert.equal(requests.length,0);
+  await store.getState().loadHabitsAndValues(...range,true);assert.equal(requests.length,1);sync.pauseSynchronization();
 });

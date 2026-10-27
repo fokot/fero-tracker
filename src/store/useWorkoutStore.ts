@@ -39,7 +39,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
   };
   const hydrate = async (version: number) => {
     const { user, spreadsheetId } = get(); if (!user || !spreadsheetId) return;
-    const record = await ensureLocal(user.id, 'workouts', spreadsheetId); publish(record, version); requestSync(record.key, 0);
+    const record = await ensureLocal(user.id, 'workouts', spreadsheetId); publish(record, version); if (!record.initialized) requestSync(record.key, 0);
   };
   const mutate = async (date: string, change: Change): Promise<boolean> => {
     const { localKey, loadedDate } = get(), version = sessionVersion;
@@ -58,7 +58,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
     },
     loadDay: async (date, refresh = false) => {
       if (!isDateKey(date)) { set({ error: 'Vyber platný dátum.' }); return; }
-      viewDate = date; const original = sessionVersion; let version = original;
+      viewDate = date; const original = sessionVersion; let version = original, discovered = false;
       const user = get().user; if (!user) return;
       try {
         if (!get().spreadsheetId) {
@@ -69,11 +69,11 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
           let id: string;
           try { id = await pending; } finally { if (discovery === pending) discovery = null; }
           if (original !== sessionVersion) return;
-          if (!get().spreadsheetId) attach(id);
+          if (!get().spreadsheetId) { attach(id); discovered = true; }
         }
         version = sessionVersion;
         await hydrate(version);
-        if (refresh && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true);
+        if ((refresh || discovered) && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true);
       } catch (error) { if (version === sessionVersion && get().user?.id === user.id) set({ error: errorMessage(error), isLoading: false }); }
     },
     saveExercise: (date, name, sets) => mutate(date, { type: 'workout-sets', date, name, sets: sets.map((set) => ({ ...set })) }),

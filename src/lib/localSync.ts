@@ -4,27 +4,30 @@ import { applyChange, emptyRecord, projectRecord, type Change, type LocalRecord 
 import { readRemote, sendRemote, invalidateRemote } from './remoteSync';
 import { useSyncStore } from '../store/useSyncStore';
 import { errorMessage } from './types';
+import { compactOperations } from './operationQueue';
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const running = new Map<string, Promise<void>>();
 const failures = new Map<string, number>();
+const refreshes = new Set<string>();
 let authorizedVersion = -1;
 const clientId = crypto.randomUUID();
 function allowed(record: LocalRecord): boolean {
   const state = useSyncStore.getState();
   return state.online && state.authorizedUserId === record.userId && authorizedVersion === getAuthVersion();
 }
-export function authorizeSynchronization(userId: string) {
+export function authorizeSynchronization(userId: string, activeSheets?: string[]) {
   authorizedVersion = getAuthVersion();
   useSyncStore.setState({ authorizedUserId: userId, error: null });
-  void wakeSynchronization();
+  void wakeSynchronization(true, activeSheets);
 }
 export function pauseSynchronization() { authorizedVersion = -1; useSyncStore.setState({ authorizedUserId: null }); }
 export function canSynchronize(userId: string): boolean {
   const state = useSyncStore.getState();
   return state.online && state.authorizedUserId === userId && authorizedVersion === getAuthVersion();
 }
-export function requestSync(key: string, delay = 650) {
+export function requestSync(key: string, delay = 650, refresh = false) {
+  if (refresh) refreshes.add(key);
   if (timers.has(key) || running.has(key)) return;
   timers.set(key, setTimeout(() => { timers.delete(key); void synchronizeRecord(key); }, delay));
 }
@@ -33,7 +36,8 @@ export async function enqueueLocal(key: string, makeChange: (data: ReturnType<ty
     if (!record?.initialized) throw new Error('Najprv načítaj túto tabuľku online.');
     const change = makeChange(projectRecord(record));
     applyChange(projectRecord(record), change);
-    return { ...record, operations: [...record.operations, { id: crypto.randomUUID(), change: structuredClone(change) }], syncError: null };
+    const operations = compactOperations(record.base, [...record.operations, { id: crypto.randomUUID(), change: structuredClone(change) }], record.batch?.operationIds);
+    return { ...record, operations, syncError: null };
   });
   useSyncStore.setState({ error: null });
   requestSync(key); return result;
@@ -60,7 +64,8 @@ async function locked(key: string, task: () => Promise<void>): Promise<boolean> 
   return true;
 }
 export async function synchronizeRecord(key: string, refresh = false): Promise<void> {
-  if (running.has(key)) return running.get(key);
+  if (running.has(key)) { if (refresh) refreshes.add(key); return running.get(key); }
+  const fullRefresh = refreshes.delete(key) || refresh;
   const timer = timers.get(key); if (timer) { clearTimeout(timer); timers.delete(key); }
   let failed = false, waitingForLease = false;
   const startedVersion = getAuthVersion();
@@ -77,18 +82,20 @@ export async function synchronizeRecord(key: string, refresh = false): Promise<v
         if (current.operations.length) {
           current = await updateLocal(key, (latest) => {
             if (!latest) throw new Error('Lokálna tabuľka chýba.');
-            return { ...latest, batch: latest.batch ?? { id: crypto.randomUUID(), operationIds: latest.operations.slice(0, 200).map((entry) => entry.id) } };
+            if (latest.batch) return latest;
+            const operations = compactOperations(latest.base, latest.operations);
+            return { ...latest, operations, batch: { id: crypto.randomUUID(), operationIds: operations.slice(0, 200).map((entry) => entry.id) } };
           });
           const batch = current.batch!;
           const operations = current.operations.filter((entry) => batch.operationIds.includes(entry.id));
-          const data = await sendRemote(current.sheetId, current.kind, operations, batch.id);
+          const data = await sendRemote(current.sheetId, current.kind, operations, batch.id, fullRefresh ? undefined : current.base);
           if (version !== getAuthVersion() || !allowed(current)) return;
           await updateLocal(key, (latest) => {
             if (!latest) throw new Error('Lokálna tabuľka chýba.');
             const next = { ...latest, base: data, operations: latest.operations.filter((entry) => !batch.operationIds.includes(entry.id)), batch: null, initialized: true, syncedAt: Date.now(), syncError: null };
             projectRecord(next); return next;
           });
-        } else if (refresh || !current.initialized || !current.syncedAt || Date.now() - current.syncedAt > 30000) {
+        } else if (fullRefresh || !current.initialized) {
           const remote = await readRemote(current.sheetId, current.kind);
           if (version !== getAuthVersion() || !allowed(current)) return;
           await updateLocal(key, (latest) => {
@@ -117,15 +124,20 @@ export async function synchronizeRecord(key: string, refresh = false): Promise<v
   })().catch((error) => { failed = true; useSyncStore.setState({ error: errorMessage(error) }); });
   running.set(key, work);
   await work; running.delete(key);
+  if ((failed || waitingForLease) && fullRefresh) refreshes.add(key);
   const latest = await readLocal(key).catch(() => null);
-  if (latest && allowed(latest) && (latest.operations.length || !latest.initialized)) {
+  if (latest && allowed(latest) && (latest.operations.length || !latest.initialized || refreshes.has(key))) {
     const attempts = failed ? (failures.get(key) ?? 0) + 1 : 0; failures.set(key, attempts);
     if (attempts < 6) requestSync(key, waitingForLease ? 3000 : failed ? Math.min(60000, 2000 * 2 ** attempts) : 100);
   }
 }
-export async function wakeSynchronization() {
+export async function wakeSynchronization(refresh = false, activeSheets?: string[]) {
   try {
-    for (const record of await listLocal()) if (allowed(record)) { failures.delete(record.key); requestSync(record.key, 50); }
+    for (const record of await listLocal()) if (allowed(record)) {
+      const fullRefresh = (refresh && (!activeSheets || activeSheets.includes(record.sheetId)))
+        || refreshes.has(record.key) || (!!record.syncError && !record.operations.length);
+      if (fullRefresh || record.operations.length || !record.initialized) { failures.delete(record.key); requestSync(record.key, 50, fullRefresh); }
+    }
   } catch (error) { useSyncStore.setState({ error: errorMessage(error) }); }
 }
 export function startLocalSync(): () => void {
@@ -134,5 +146,5 @@ export function startLocalSync(): () => void {
   window.addEventListener('online', online); window.addEventListener('offline', online); window.addEventListener('focus', visible); document.addEventListener('visibilitychange', visible);
   const unsubscribe = subscribeLocal((key) => { if (!running.has(key)) void readLocal(key).then((record) => { if (record && allowed(record) && (record.operations.length || !record.initialized)) requestSync(key); }).catch(() => {}); });
   online();
-  return () => { unsubscribe(); for (const timer of timers.values()) clearTimeout(timer); timers.clear(); window.removeEventListener('online', online); window.removeEventListener('offline', online); window.removeEventListener('focus', visible); document.removeEventListener('visibilitychange', visible); };
+  return () => { unsubscribe(); for (const timer of timers.values()) clearTimeout(timer); timers.clear(); refreshes.clear(); window.removeEventListener('online', online); window.removeEventListener('offline', online); window.removeEventListener('focus', visible); document.removeEventListener('visibilitychange', visible); };
 }

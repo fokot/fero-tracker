@@ -10,7 +10,7 @@ interface HabitStore {
   localKey: string | null; queuedWrites: number; syncError: string | null; syncedAt: number | null;
   setSession: (user: User, spreadsheetId: string | null) => void;
   clearUser: () => void;
-  loadHabitsAndValues: (start: Date, end: Date) => Promise<void>;
+  loadHabitsAndValues: (start: Date, end: Date, refresh?: boolean) => Promise<void>;
   addHabit: (name: string, type: HabitType) => Promise<boolean>;
   renameHabit: (habitId: string, name: string) => Promise<boolean>;
   deleteHabit: (habitId: string) => Promise<boolean>;
@@ -31,7 +31,7 @@ export const useHabitStore = create<HabitStore>((set, get) => {
   };
   const hydrate = async (version: number) => {
     const { user, spreadsheetId } = get(); if (!user || !spreadsheetId) return;
-    try { const record = await ensureLocal(user.id, 'habits', spreadsheetId); publish(record, version); requestSync(record.key, 0); }
+    try { const record = await ensureLocal(user.id, 'habits', spreadsheetId); publish(record, version); if (!record.initialized) requestSync(record.key, 0); }
     catch (error) { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }
   };
   const mutate = async (make: (data: TrackerData) => Change): Promise<boolean> => {
@@ -52,7 +52,7 @@ export const useHabitStore = create<HabitStore>((set, get) => {
       void hydrate(version);
     },
     clearUser: () => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; publishedRevision = -1; set(emptyState()); },
-    loadHabitsAndValues: async () => { const version = sessionVersion; await hydrate(version); if (version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true); },
+    loadHabitsAndValues: async (_start, _end, refresh = false) => { const version = sessionVersion; await hydrate(version); if (refresh && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true); },
     addHabit: (name, type) => {
       const habit: Habit = { id: crypto.randomUUID(), name: name.trim(), type };
       return mutate(() => ({ type: 'habit-add', habit }));

@@ -3,8 +3,9 @@ import { prepareSheetConnection } from './sheetConnections';
 import { saveSheetChoice, type SheetChoice, type TrackerKind } from './preferences';
 import { useHabitStore } from '../store/useHabitStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
-import { canSynchronize } from './localSync';
+import { canSynchronize, requestSync } from './localSync';
 import { invalidateRemote } from './remoteSync';
+import { recordKey } from './localModel';
 
 export async function applySheetConnection(kind: TrackerKind, file: SheetChoice): Promise<boolean | null> {
   const habits = useHabitStore.getState(), workouts = useWorkoutStore.getState();
@@ -21,5 +22,6 @@ export async function applySheetConnection(kind: TrackerKind, file: SheetChoice)
   invalidateRemote(file.id);
   if (kind === 'habits') useHabitStore.getState().setSession(user, file.id);
   else useWorkoutStore.getState().setSpreadsheet(file.id);
+  requestSync(recordKey(user.id, kind, file.id), 0, true);
   return remembered;
 }

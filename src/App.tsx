@@ -69,7 +69,7 @@ function App() {
       useWorkoutStore.getState().setUser(authorized);
       if (workoutId) useWorkoutStore.getState().setSpreadsheet(workoutId);
       useHabitStore.getState().setSession(authorized, spreadsheetId);
-      authorizeSynchronization(authorized.id);
+      authorizeSynchronization(authorized.id, [spreadsheetId, workoutId].filter((id): id is string => !!id));
       if (sheetError) useHabitStore.setState({ error: sheetError });
     } catch (reason) {
       if (current === attempt.current) { signOut(); pauseSynchronization(); setError(errorMessage(reason)); }

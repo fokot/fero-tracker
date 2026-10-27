@@ -4,6 +4,7 @@ import { createLoader, plain } from './load-module.mjs';
 const marker = { metadataKey: 'feros-tracker-layout', metadataValue: 'date-rows-v1' };
 export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], legacy = false, existing = 'sheet-1', failDrive = false, failBatch = false, loseBatchResponse = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
   const calls = [];
+  let gridCellsRead = 0;
   let version = 0;
   let responseLost = false;
   const tab = (sheetId, title, rows, columnCount = 26) => ({ properties: { sheetId, title, gridProperties: { columnCount, rowCount } }, rows: plain(rows) });
@@ -100,12 +101,34 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       return {values:plain(target.rows)};
     }
     if(parsed.searchParams.get('fields')?.includes('data(')) {
-      const names=parsed.searchParams.getAll('ranges').map(name=>name.replaceAll("'",''));
-      return {sheets:plain(tabs.filter(tab=>names.includes(tab.properties.title)).map(({rows,...metadata})=>({...metadata,data:[{rowData:rows.map(row=>({values:row.map(value=>({formattedValue:value,userEnteredValue:{stringValue:value}}))}))}]})))};
+      const ranges=parsed.searchParams.getAll('ranges');
+      const sheets=[];
+      const colIndex=text=>[...text].reduce((n,char)=>n*26+char.charCodeAt(0)-64,0)-1;
+      for(const {rows,...metadata} of tabs) {
+        const data=[];
+        for(const range of ranges) {
+          const [name,selection]=range.replaceAll("'",'').split('!');if(name!==metadata.properties.title)continue;
+          let row=0,col=0,endRow=rows.length,endCol=Infinity;
+          if(selection==='1:1')endRow=Math.min(1,rows.length);
+          else if(selection) {
+            const m=selection.match(/^([A-Z]+)(\d*)?(?::([A-Z]+)(\d*)?)?$/);assert.ok(m,`Unsupported test range ${range}`);
+            col=colIndex(m[1]);row=m[2]?Number(m[2])-1:0;
+            endCol=colIndex(m[3]??m[1])+1;
+            if(!selection.includes(':'))endRow=Math.min(rows.length,row+1);
+            else if(m[4])endRow=Math.min(rows.length,Number(m[4]));
+          }
+          const selected=rows.slice(row,endRow).map(source=>Array.from({length:Math.max(0,Math.min(source.length,endCol)-col)},(_,index)=>source[col+index]??''));
+          while(selected.length&&!selected.at(-1).some(Boolean))selected.pop();
+          gridCellsRead+=selected.reduce((sum,row)=>sum+row.length,0);
+          data.push({startRow:row,startColumn:col,rowData:selected.map(row=>({values:row.map(value=>({formattedValue:value,userEnteredValue:{stringValue:value}}))}))});
+        }
+        if(data.length)sheets.push({...metadata,data});
+      }
+      return {sheets:plain(sheets)};
     }
     return {spreadsheetId:'sheet-1',sheets:plain(tabs.map(({rows,...metadata})=>metadata))};
   };
   const auth={getAuthVersion:()=>version,getValidAccessToken:()=>'token',SessionExpiredError:class extends Error{}};
   const sheets=createLoader({mocks:{'./googleApi':{googleRequest:request},'./googleOAuth':auth}})(apiModule);
-  return {sheets,calls,get tabs(){return tabs;},get rows(){return get(tabs,0).rows;},get definitions(){return tabs.find((sheet)=>sheet.properties.title==='HabitDefinitions')?.rows;},signOut(){version++;}};
+  return {sheets,calls,get gridCellsRead(){return gridCellsRead;},get tabs(){return tabs;},get rows(){return get(tabs,0).rows;},get definitions(){return tabs.find((sheet)=>sheet.properties.title==='HabitDefinitions')?.rows;},signOut(){version++;}};
 }

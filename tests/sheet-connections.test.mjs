@@ -21,7 +21,7 @@ function switchSetup(prepare=async()=>{}) {
   const values=new Map();let version=0;
   const load=createLoader({globals:{localStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)}},mocks:{
     './sheetConnections':{prepareSheetConnection:prepare},'./googleOAuth':{getAuthVersion:()=>version},
-    './localSync':{canSynchronize:()=>true}, './remoteSync':{invalidateRemote:()=>{}},
+    './localSync':{canSynchronize:()=>true,requestSync:()=>{}}, './remoteSync':{invalidateRemote:()=>{}},
     '../lib/localSync':{ensureLocal:()=>new Promise(()=>{}),requestSync:()=>{}},
     '../lib/localDatabase':{subscribeLocal:()=>()=>{}},
   }});

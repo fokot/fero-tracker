@@ -8,10 +8,10 @@ const until = async predicate => { for(let i=0; i<30 && !predicate(); i++) await
 test('several durable edits share one cloud batch and acknowledge only committed IDs', async () => {
   const env=setupLocal(), key=await env.seed();
   await Promise.all(['✓','','✓'].map(value=>env.sync.enqueueLocal(key,()=>change(value))));
-  assert.equal((await env.database.api.readLocal(key)).operations.length,3);assert.equal(env.sends.length,0);
+  assert.equal((await env.database.api.readLocal(key)).operations.length,1);assert.equal(env.sends.length,0);
   env.sync.authorizeSynchronization(user.id);await env.sync.synchronizeRecord(key);
   const saved=await env.database.api.readLocal(key);
-  assert.equal(env.sends.length,1);assert.equal(env.sends[0][2].length,3);assert.equal(saved.operations.length,0);
+  assert.equal(env.sends.length,1);assert.equal(env.sends[0][2].length,1);assert.equal(saved.operations.length,0);
   assert.equal(saved.base.values['2026-10-25'].Run,'✓');assert.equal(saved.batch,null);env.sync.pauseSynchronization();
 });
 test('a new local edit during a cloud request is preserved for the following batch',async()=>{
@@ -81,4 +81,50 @@ test('failure to persist a Google acknowledgement keeps the outbox, and a succes
   const before=await env.database.api.readLocal(key);assert.equal(before.operations.length,1);assert.ok(before.batch);assert.equal(env.status.getState().error,'Storage full');
   env.database.fail(null);env.cloud.sendRemote=send;await env.sync.synchronizeRecord(key);
   assert.equal((await env.database.api.readLocal(key)).operations.length,0);assert.equal(env.status.getState().error,null);env.sync.pauseSynchronization();
+});
+test('idle navigation does not refresh old cached history, while explicit refresh still fetches it',async()=>{
+  const env=setupLocal(),key=await env.seed();await env.database.api.updateLocal(key,record=>({...record,syncedAt:Date.now()-3600000}));
+  env.sync.authorizeSynchronization(user.id,[]);await tick();
+  await env.sync.synchronizeRecord(key);assert.equal(env.requests.length,0);
+  await env.sync.synchronizeRecord(key,true);assert.equal(env.requests.length,1);env.sync.pauseSynchronization();
+});
+test('login refreshes active sheets and leaves unrelated idle cached files alone',async()=>{
+  const env=setupLocal(),active=await env.seed(),old=await env.seed('habits','old-sheet');
+  env.sync.authorizeSynchronization(user.id,['sheet-1']);await tick();
+  await env.sync.synchronizeRecord(active);await env.sync.synchronizeRecord(old);
+  assert.deepEqual(env.requests,[['sheet-1','habits']]);env.sync.pauseSynchronization();
+});
+test('a refresh requested during an upload is preserved and runs after that batch',async()=>{
+  const gate=deferred(),env=setupLocal({remote:{sendRemote:()=>gate.promise}}),key=await env.seed();
+  env.sync.authorizeSynchronization(user.id,[]);await tick();await env.sync.enqueueLocal(key,()=>change('✓'));
+  const upload=env.sync.synchronizeRecord(key);await until(()=>!!env.database.records.get(key).batch);
+  const refresh=env.sync.synchronizeRecord(key,true);
+  gate.resolve({...habitData,values:{'2026-10-25':{Run:'✓'}}});await Promise.all([upload,refresh]);
+  assert.equal(env.requests.length,0);await env.sync.synchronizeRecord(key);assert.equal(env.requests.length,1);env.sync.pauseSynchronization();
+});
+test('a failed batch retains its payload while later edits coalesce separately',async()=>{
+  const env=setupLocal(),key=await env.seed();env.sync.authorizeSynchronization(user.id,[]);await tick();
+  const original=env.cloud.sendRemote,payloads=[];let fail=true;
+  env.cloud.sendRemote=async(...args)=>{payloads.push(structuredClone(args));if(fail)throw new Error('Lost network');return original(...args);};
+  await env.sync.enqueueLocal(key,()=>change('✓'));await env.sync.synchronizeRecord(key);
+  await env.sync.enqueueLocal(key,()=>change(''));await env.sync.enqueueLocal(key,()=>change('✓'));await env.sync.enqueueLocal(key,()=>change(''));
+  const before=await env.database.api.readLocal(key);assert.equal(before.operations.length,2);assert.equal(before.batch.id,payloads[0][3]);
+  fail=false;await env.sync.synchronizeRecord(key);assert.deepEqual(plain(payloads[0]),plain(payloads[1]));
+  assert.equal(env.model.projectRecord(await env.database.api.readLocal(key)).values['2026-10-25'].Run,'');
+  await env.sync.synchronizeRecord(key);assert.equal((await env.database.api.readLocal(key)).operations.length,0);env.sync.pauseSynchronization();
+});
+test('a full refresh waiting for another tab lease is not forgotten',async()=>{
+  const env=setupLocal({globals:{navigator:{onLine:true}}}),key=await env.seed();
+  env.sync.authorizeSynchronization(user.id,[]);await tick();
+  await env.database.api.updateLocal(key,record=>({...record,lease:{owner:'other',expires:Date.now()+90000}}));
+  await env.sync.synchronizeRecord(key,true);assert.equal(env.requests.length,0);
+  await env.database.api.updateLocal(key,record=>({...record,lease:{owner:'other',expires:0}}));
+  await env.sync.synchronizeRecord(key);assert.equal(env.requests.length,1);env.sync.pauseSynchronization();
+});
+test('connectivity wake retries a failed idle refresh without polling other idle sheets',async()=>{
+  const env=setupLocal(),key=await env.seed(),idle=await env.seed('habits','idle-sheet');
+  await env.database.api.updateLocal(key,record=>({...record,syncError:'Previous refresh failed'}));
+  env.sync.authorizeSynchronization(user.id,[]);await tick();await env.sync.wakeSynchronization();
+  await env.sync.synchronizeRecord(key);await env.sync.synchronizeRecord(idle);
+  assert.deepEqual(env.requests,[['sheet-1','habits']]);env.sync.pauseSynchronization();
 });

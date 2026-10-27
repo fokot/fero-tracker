@@ -69,3 +69,54 @@ test('ambiguous stable habit IDs are rejected before a queued edit can target th
   await assert.rejects(env.sheets.sendRemote('sheet-1','habits',[value('same','2026-10-25','✓')],'ambiguous'),/jedinečné ID/);
   assert.equal(env.calls.filter(call=>call.method==='POST').length,0);
 });
+test('ordinary values read only fresh row/column indexes, and preserve server neighbors and cached history',async()=>{
+  const env=setup({rows:rows(),extraTabs:[receipt()]}),base=(await env.sheets.readRemote('sheet-1','habits')).data;env.calls.length=0;
+  env.rows.splice(1,0,['2026-10-24','✓','99']);env.rows[3][2]='external edit';
+  const result=await env.sheets.sendRemote('sheet-1','habits',[value('run','2026-10-26','✓')],'fast',base);
+  assert.equal(env.calls.length,2);
+  assert.deepEqual(new URL(env.calls[0].url).searchParams.getAll('ranges'),["'Habits'!1:1","'Habits'!A2:A","'HabitDefinitions'!A:C","'FeroTrackerSync'!A:A","'FeroTrackerSync'!B1"]);
+  assert.equal(env.rows[3][1],'✓');assert.equal(env.rows[3][2],'external edit');assert.equal(env.rows[2][2],'0');
+  assert.equal(result.values['2026-10-26'].Run,'✓');assert.equal(result.values['2026-10-25'].Read,'0');
+});
+test('new dates append once without touching trailing notes with blank date cells',async()=>{
+  const env=setup({rows:[...rows(),['','do not overwrite','tail note']]}),base=(await env.sheets.readRemote('sheet-1','habits')).data;
+  await env.sheets.sendRemote('sheet-1','habits',[value('run','2026-10-27','✓'),value('read','2026-10-27','0')],'append-fast',base);
+  assert.deepEqual(plain(env.rows[3]),['','do not overwrite','tail note']);assert.deepEqual(plain(env.rows[4]),['2026-10-27','✓','0']);
+  assert.equal(env.rows.filter(row=>row[0]==='2026-10-27').length,1);
+});
+test('fast clears update duplicate dates but never append an empty day',async()=>{
+  const env=setup({rows:[...rows(),['2026-10-25','✓','4']]}),base=(await env.sheets.readRemote('sheet-1','habits')).data;
+  await env.sheets.sendRemote('sheet-1','habits',[value('run','2026-10-25',''),value('run','2026-10-30','')],'clear-fast',base);
+  assert.ok(env.rows.filter(row=>row[0]==='2026-10-25').every(row=>row[1]===''));assert.equal(env.rows.length,4);assert.equal(env.rows[3][2],'4');
+});
+test('a reordered schema falls back to a complete snapshot before locating the target cell',async()=>{
+  const env=setup({rows:rows()}),base=(await env.sheets.readRemote('sheet-1','habits')).data;env.calls.length=0;
+  for(const row of env.rows)[row[1],row[2]]=[row[2],row[1]];
+  await env.sheets.sendRemote('sheet-1','habits',[value('run','2026-10-26','✓')],'reorder',base);
+  assert.equal(env.rows[2][2],'✓');assert.equal(env.rows[2][1],'10');
+  assert.ok(env.calls.some(call=>new URL(call.url).searchParams.getAll('ranges').includes("'Habits'")));
+});
+test('a lost fast-append acknowledgement uses the receipt on retry and does not append twice',async()=>{
+  const env=setup({rows:rows(),loseBatchResponse:true}),base=(await env.sheets.readRemote('sheet-1','habits')).data,ops=[value('run','2026-10-27','✓')];
+  await assert.rejects(env.sheets.sendRemote('sheet-1','habits',ops,'lost-fast',base),/Response lost/);
+  const result=await env.sheets.sendRemote('sheet-1','habits',ops,'lost-fast',base);
+  assert.equal(result.values['2026-10-27'].Run,'✓');assert.equal(env.rows.filter(row=>row[0]==='2026-10-27').length,1);assert.equal(env.calls.filter(call=>call.method==='POST').length,1);
+});
+test('fast workout saves retain set order and zero, and clear only the intended day',async()=>{
+  const env=setup({sheetName:'Workouts',definitions:null,rows:[['Date','Bench','Drep'],['2026-10-25','5×100','8×80'],['2026-10-26','3×120','']]}),base=(await env.sheets.readRemote('sheet-1','workouts')).data;env.calls.length=0;
+  const result=await env.sheets.sendRemote('sheet-1','workouts',[op({type:'workout-sets',date:'2026-10-25',name:'bench',sets:[{reps:5,weight:0},{reps:3,weight:120}]}),op({type:'workout-sets',date:'2026-10-26',name:'Bench',sets:[]})],'workout-fast',base);
+  assert.equal(env.rows[1][1],'5×0, 3×120');assert.equal(env.rows[1][2],'8×80');assert.equal(env.rows[2][1],'');assert.equal(result.days['2026-10-25'].Drep[0].weight,80);
+  assert.ok(!new URL(env.calls[0].url).searchParams.getAll('ranges').includes("'Workouts'"));
+});
+test('new workout columns still use the full structural path and keep their header after clearing',async()=>{
+  const env=setup({sheetName:'Workouts',definitions:null,rows:[['Date','Bench']]}),base=(await env.sheets.readRemote('sheet-1','workouts')).data;
+  await env.sheets.sendRemote('sheet-1','workouts',[op({type:'workout-sets',date:'2026-10-25',name:'New',sets:[{reps:5,weight:0}]}),op({type:'workout-sets',date:'2026-10-25',name:'New',sets:[]})],'new-column',base);
+  assert.deepEqual(plain(env.rows[0]),['Date','Bench','New']);assert.equal(env.rows[1][2],'');
+});
+test('1000 days and 30 habits transfer over 95 percent fewer grid cells for a normal write',async t=>{
+  const names=Array.from({length:30},(_,i)=>`H${i}`),dates=Array.from({length:1000},(_,i)=>new Date(Date.UTC(2024,0,1)+i*86400000).toISOString().slice(0,10));
+  const env=setup({rows:[['Date',...names],...dates.map(date=>[date,...names.map(()=> '✓')])],definitions:[['ID','Name','Type'],...names.map(name=>[name,name,'boolean'])],columns:31,extraTabs:[receipt()]}),base=(await env.sheets.readRemote('sheet-1','habits')).data;
+  const before=env.gridCellsRead;await env.sheets.sendRemote('sheet-1','habits',[value('H20',dates[500],'')],'large-fast',base);
+  const after=env.gridCellsRead-before;assert.ok(after/before<0.05,`${after} / ${before}`);assert.equal(env.rows[501][21],'');
+  t.diagnostic(`Grid cells read: ${before} before, ${after} after (${(100*(1-after/before)).toFixed(1)}% less).`);
+});

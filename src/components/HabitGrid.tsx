@@ -87,7 +87,7 @@ export function HabitGrid() {
       <div className="calendar-period"><strong>{dates[30].toLocaleDateString('sk-SK', { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title="Prejsť na dnešný dátum"><Icon name="today" size={17} />Dnes</button></div>
       <div className="toolbar-actions">
         {spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Open Google Sheet" title="Otvoriť Google Sheet"><Icon name="external" size={18} /></a>}
-        <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1])} className="icon-button" aria-label="Refresh" title="Obnoviť"><Icon name="refresh" size={18} /></button>
+        <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1], true)} className="icon-button" aria-label="Refresh" title="Obnoviť"><Icon name="refresh" size={18} /></button>
       </div>
     </div>
     {error && <p role="alert" className="error-banner">{error}</p>}

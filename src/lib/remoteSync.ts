@@ -5,6 +5,7 @@ import { isDateKey } from './dates';
 import { formatWorkoutSets, parseWorkoutSets } from './workouts';
 import { applyChange, type LocalOperation, type TrackerData, type HabitData, type WorkoutData } from './localModel';
 import type { TrackerKind } from './preferences';
+import { compactOperations } from './operationQueue';
 
 const LEDGER = 'FeroTrackerSync';
 interface RemoteTab { properties: SheetProperties; rows: string[][] }
@@ -39,7 +40,7 @@ export function dataFromTabs(tabs: RemoteTab[], kind: TrackerKind): TrackerData 
   return { kind, exercises: names, days };
 }
 
-export async function readRemote(id: string, kind: TrackerKind, repaired = false): Promise<RemoteSnapshot> {
+async function fetchTabs(id: string, kind: TrackerKind, indexOnly = false): Promise<{ tabs: RemoteTab[]; sheets: GridSheet[] }> {
   let meta = metadata.get(id);
   if (!meta || meta.expires < Date.now()) {
     const result = await googleRequest<{ sheets: Sheet[] }>(`${sheetUrl(id)}?fields=sheets(properties)`);
@@ -47,7 +48,11 @@ export async function readRemote(id: string, kind: TrackerKind, repaired = false
   }
   const titles = [kind === 'habits' ? 'Habits' : 'Workouts', ...(kind === 'habits' ? ['HabitDefinitions'] : []), LEDGER];
   const query = new URLSearchParams({ fields: 'sheets(properties,developerMetadata(metadataKey,metadataValue),data(startRow,startColumn,rowData(values(formattedValue,userEnteredValue))))' });
-  for (const title of titles) if (meta.sheets.some((tab) => tab.properties.title === title)) query.append('ranges', `'${title}'`);
+  for (const title of titles) if (meta.sheets.some((tab) => tab.properties.title === title)) {
+    const ranges = !indexOnly ? [`'${title}'`] : title === LEDGER ? [`'${title}'!A:A`, `'${title}'!B1`]
+      : title === 'HabitDefinitions' ? [`'${title}'!A:C`] : [`'${title}'!1:1`, `'${title}'!A2:A`];
+    for (const range of ranges) query.append('ranges', range);
+  }
   if (!query.has('ranges')) throw new Error('V Google Sheete chýba list trackera. Vyber alebo oprav tabuľku v nastaveniach.');
   let response: { sheets: GridSheet[] };
   try { response = await googleRequest(`${sheetUrl(id)}?${query}`); }
@@ -68,17 +73,26 @@ export async function readRemote(id: string, kind: TrackerKind, repaired = false
     tab.rows = Array.from({ length: tab.rows.length }, (_, index) => tab!.rows[index] ?? []);
     for (const row of tab.rows) { while (row.length && row[row.length - 1] === '') row.pop(); }
   }
+  return { tabs, sheets: response.sheets };
+}
+
+function readBatches(tabs: RemoteTab[]): Set<string> {
+  const ledger = tabs.find((tab) => tab.properties.title === LEDGER);
+  if (ledger?.rows.length && (ledger.rows[0][0] !== 'Batch ID' || ledger.rows[0][1] !== 'Saved at')) throw new Error('List FeroTrackerSync má neplatný formát. Záznamy v zariadení zostali zachované.');
+  return new Set(ledger?.rows.slice(1).map((row) => row[0]) ?? []);
+}
+
+export async function readRemote(id: string, kind: TrackerKind, repaired = false): Promise<RemoteSnapshot> {
+  const { tabs, sheets } = await fetchTabs(id, kind);
   if (kind === 'habits' && !repaired) {
     const primary = tabs.find((tab) => tab.properties.title === 'Habits');
     const defs = tabs.find((tab) => tab.properties.title === 'HabitDefinitions');
-    const marked = response.sheets.find((tab) => tab.properties.title === 'Habits')?.developerMetadata?.some((entry) => entry.metadataKey === 'feros-tracker-layout' && entry.metadataValue === 'date-rows-v1');
+    const marked = sheets.find((tab) => tab.properties.title === 'Habits')?.developerMetadata?.some((entry) => entry.metadataKey === 'feros-tracker-layout' && entry.metadataValue === 'date-rows-v1');
     if (!defs || JSON.stringify(defs.rows[0]?.slice(0, 3)) !== JSON.stringify(['ID', 'Name', 'Type']) || (!marked && JSON.stringify(primary?.rows[0]) === JSON.stringify(['Date', 'Habit Name', 'Value'])) || primary?.rows[0]?.slice(1).some((name) => !defs.rows.some((row) => row[1] === name))) {
       await connectHabitSheet(id); invalidateRemote(id); return readRemote(id, kind, true);
     }
   }
-  const ledger = tabs.find((tab) => tab.properties.title === LEDGER);
-  if (ledger?.rows.length && (ledger.rows[0][0] !== 'Batch ID' || ledger.rows[0][1] !== 'Saved at')) throw new Error('List FeroTrackerSync má neplatný formát. Záznamy v zariadení zostali zachované.');
-  return { tabs, data: dataFromTabs(tabs, kind), batches: new Set(ledger?.rows.slice(1).map((row) => row[0]) ?? []) };
+  return { tabs, data: dataFromTabs(tabs, kind), batches: readBatches(tabs) };
 }
 
 export function planRemote(snapshot: RemoteSnapshot, operations: LocalOperation[], batchId: string): { requests: unknown[]; data: TrackerData } {
@@ -153,16 +167,89 @@ export function planRemote(snapshot: RemoteSnapshot, operations: LocalOperation[
   return { requests, data };
 }
 
-export async function sendRemote(id: string, kind: TrackerKind, operations: LocalOperation[], batchId: string): Promise<TrackerData> {
-  return serialize(id, async () => {
-  const snapshot = await readRemote(id, kind);
-  const plan = planRemote(snapshot, operations, batchId);
-  if (plan.requests.length) {
-    try { await batch(id, plan.requests); }
-    catch (error) { invalidateRemote(id); throw error; }
-    // The next snapshot includes the hidden receipt tab, even after a lost response.
-    if (!snapshot.tabs.some((tab) => tab.properties.title === LEDGER)) invalidateRemote(id);
+// Existing columns need only their current names and physical date rows. Never
+// reuse cached row/column positions: users may sort or insert rows in Sheets.
+function sameSchema(base: TrackerData, remote: TrackerData): boolean {
+  if (base.kind === 'habits' && remote.kind === 'habits') {
+    const schema = (data: HabitData) => data.habits.map(({ id, name, type }) => [id, name, type]);
+    return JSON.stringify(schema(base)) === JSON.stringify(schema(remote));
   }
-  return plan.data;
+  return base.kind === 'workouts' && remote.kind === 'workouts' && JSON.stringify(base.exercises) === JSON.stringify(remote.exercises);
+}
+function existingValuesOnly(base: TrackerData, operations: LocalOperation[]): boolean {
+  return operations.every(({ change }) => base.kind === 'habits' && change.type === 'habit-value'
+    ? base.habits.some((habit) => habit.id === change.habitId)
+    : base.kind === 'workouts' && change.type === 'workout-sets'
+      && base.exercises.some((name) => name.toLowerCase() === change.name.trim().toLowerCase()));
+}
+function planValues(snapshot: RemoteSnapshot, base: TrackerData, operations: LocalOperation[], batchId: string): { requests: unknown[]; data: TrackerData } {
+  const table = snapshot.tabs.find((tab) => tab.properties.title === (base.kind === 'habits' ? 'Habits' : 'Workouts'))!;
+  const requests: unknown[] = [], changes = new Map<string, Map<number, string>>();
+  let data = base;
+  for (const { change } of compactOperations(base, operations)) {
+    data = applyChange(data, change);
+    let date: string, name: string, value: string;
+    if (change.type === 'habit-value' && data.kind === 'habits') {
+      date = change.date; name = data.habits.find((habit) => habit.id === change.habitId)!.name; value = change.value.trim();
+    } else if (change.type === 'workout-sets' && data.kind === 'workouts') {
+      date = change.date; name = data.exercises.find((entry) => entry.toLowerCase() === change.name.trim().toLowerCase())!; value = formatWorkoutSets(change.sets);
+    } else throw new Error('Táto zmena vyžaduje úplné načítanie tabuľky.');
+    const column = table.rows[0].indexOf(name, 1);
+    if (column < 1) throw new Error('Stĺpec chýba. Obnov synchronizáciu.');
+    if (!changes.has(date)) changes.set(date, new Map());
+    changes.get(date)!.set(column, value);
+  }
+  const newRows: string[][] = [];
+  for (const [date, values] of changes) {
+    const rows = table.rows.flatMap((row, index) => index > 0 && row[0] === date ? [index] : []);
+    if (rows.length) {
+      for (const rowIndex of rows) for (const [columnIndex, value] of values) requests.push({ updateCells: {
+        start: { sheetId: table.properties.sheetId, rowIndex, columnIndex }, rows: rowData([[value]]), fields: 'userEnteredValue',
+      } });
+    } else if ([...values.values()].some((value) => value !== '')) {
+      const row = Array.from({ length: Math.max(...values.keys()) + 1 }, () => ''); row[0] = date;
+      for (const [column, value] of values) row[column] = value;
+      newRows.push(row);
+    }
+  }
+  // Server-side append also preserves trailing rows with blank dates or notes.
+  if (newRows.length) requests.push({ appendCells: { sheetId: table.properties.sheetId, rows: rowData(newRows), fields: 'userEnteredValue' } });
+  let ledger = snapshot.tabs.find((tab) => tab.properties.title === LEDGER);
+  if (!ledger) {
+    ledger = { properties: { sheetId: Math.max(-1, ...snapshot.tabs.map((tab) => tab.properties.sheetId)) + 1, title: LEDGER, gridProperties: { rowCount: 1000, columnCount: 2 } }, rows: [] };
+    requests.push({ addSheet: { properties: { ...ledger.properties, hidden: true } } });
+  }
+  if (!ledger.rows.length) requests.push({ updateCells: { start: { sheetId: ledger.properties.sheetId, rowIndex: 0, columnIndex: 0 }, rows: rowData([['Batch ID', 'Saved at']]), fields: 'userEnteredValue' } });
+  requests.push({ appendCells: { sheetId: ledger.properties.sheetId, rows: rowData([[batchId, new Date().toISOString()]]), fields: 'userEnteredValue' } });
+  return { requests, data };
+}
+
+export async function sendRemote(id: string, kind: TrackerKind, operations: LocalOperation[], batchId: string, base?: TrackerData): Promise<TrackerData> {
+  return serialize(id, async () => {
+    let snapshot: RemoteSnapshot | undefined, plan: { requests: unknown[]; data: TrackerData } | undefined;
+    if (base?.kind === kind && existingValuesOnly(base, operations)) {
+      const { tabs } = await fetchTabs(id, kind, true);
+      const batches = readBatches(tabs);
+      let schema: TrackerData | undefined;
+      // Missing/changed definitions may need the full reader's repair path.
+      try { schema = dataFromTabs(tabs.map((tab) => tab.properties.title === 'HabitDefinitions' ? tab : { ...tab, rows: tab.rows.slice(0, 1) }), kind); }
+      catch { /* Fall back to the validated full snapshot below. */ }
+      if (schema && sameSchema(base, schema) && !batches.has(batchId)) {
+        snapshot = { tabs, data: schema, batches };
+        plan = planValues(snapshot, base, operations, batchId);
+      }
+    }
+    // Structural edits, mismatched schemas and a lost acknowledgement need the
+    // complete current server snapshot. Pending local operations stay durable.
+    if (!plan) {
+      snapshot = await readRemote(id, kind);
+      plan = planRemote(snapshot, compactOperations(snapshot.data, operations), batchId);
+    }
+    if (plan.requests.length) {
+      try { await batch(id, plan.requests); }
+      catch (error) { invalidateRemote(id); throw error; }
+      if (!snapshot!.tabs.some((tab) => tab.properties.title === LEDGER)) invalidateRemote(id);
+    }
+    return plan.data;
   });
 }
