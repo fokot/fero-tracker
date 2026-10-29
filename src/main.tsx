@@ -1,3 +1,4 @@
+import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { subscribeLocale, startLocale } from './i18n/locale';
 import { t } from './i18n/messages'
 import React from 'react'
@@ -19,6 +20,7 @@ if (import.meta.hot) import.meta.hot.dispose(() => { stopTheme(); stopSync(); st
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    <PwaUpdateNotice />
     <App />
   </React.StrictMode>,
 )

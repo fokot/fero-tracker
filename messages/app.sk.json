@@ -225,5 +225,9 @@
   "language.slovak": "Slovenčina",
   "language.english": "English",
   "language.skShort": "SK",
-  "language.enShort": "EN"
+  "language.enShort": "EN",
+  "update.title": "Nová verzia je pripravená.",
+  "update.help": "Ulož rozpracované úpravy a načítaj ju, keď sa ti to hodí.",
+  "update.closeEditor": "Najprv ulož alebo zavri otvorený formulár.",
+  "update.reload": "Načítať novú verziu"
 }

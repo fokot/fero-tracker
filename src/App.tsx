@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { translateError } from './i18n/messages';
 import { useLocale } from './i18n/react';
 import { t } from './i18n/messages';
@@ -98,6 +99,7 @@ function App() {
     {error && <p role="alert" className="error-banner">{translateError(error)}</p>}
   </>} />;
   return <div className="login-page"><main className="login-panel">
+    <LanguageSwitcher />
     <h1 className="login-title">Fero Tracker</h1>
     <p className="login-description">{t('login.description')}</p>
     {error && <p role="alert" className="mb-4 text-sm text-red-700">{translateError(error)}</p>}

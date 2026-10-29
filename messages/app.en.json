@@ -225,5 +225,9 @@
   "language.slovak": "Slovenčina",
   "language.english": "English",
   "language.skShort": "SK",
-  "language.enShort": "EN"
+  "language.enShort": "EN",
+  "update.title": "A new version is ready.",
+  "update.help": "Save your drafts and load it when you are ready.",
+  "update.closeEditor": "Save or close the open form first.",
+  "update.reload": "Load new version"
 }

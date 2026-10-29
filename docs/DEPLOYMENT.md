@@ -53,9 +53,9 @@ The manifest uses relative `id`, `scope`, `start_url`, and icon URLs, so the ins
 
 The worker is registered at `${BASE_URL}sw.js` with that same scope. Its precache includes the application and documentation documents, emitted scripts/styles, manifest, and icons. It handles only known static assets and the two known documents. Other navigation, Google APIs, account data, credentials, and non-GET requests bypass it. The cached shell stays consistent with its bundled scripts instead of mixing new HTML with an old cache.
 
-Cache names include the full deployment path. Activating `/fero-tracker/sw.js` deletes only older caches for `/fero-tracker/`; it does not delete Sheetbase storage or caches for `/sheetbase/` or another tracker path. Existing legacy root shell caches with timestamp names are cleaned only by a root deployment.
+Cache names include the full deployment path. Activating `/fero-tracker/sw.js` keeps the new and immediately previous static caches and deletes only older caches for `/fero-tracker/`; it does not delete Sheetbase storage or caches for `/sheetbase/` or another tracker path. Existing legacy root shell caches with timestamp names are cleaned only by a root deployment.
 
-A new worker waits until old controlled windows close. There is no `skipWaiting` and no forced reload, protecting unsaved editor drafts. Save drafts, close all app windows and browser tabs, then reopen to activate an update. After initial setup, a worker can also serve cached documentation offline; its sample preview is in memory and resets on reload.
+After a complete precache, a new worker calls `skipWaiting` and claims clients. Failed precaches are discarded and never activate. Existing documents are not force-reloaded; the immediately previous static cache is retained for already-open pages. The app checks for updates again on foreground/online events (at most once per minute) and offers **Load new version** when its controller changes. Save and close open forms before reloading; unfinished local writes and open dialogs block that action. A new opening uses the activated shell without needing to close unrelated tabs. After initial setup, a worker can also serve cached documentation offline; its sample preview is in memory and resets on reload.
 
 Browser local storage and IndexedDB are scoped to an **origin**, not a URL path. Subpaths share tracker storage on the same origin even though their service-worker caches are isolated. Changing origin, browser, or installed-app storage creates a different local store; synchronize or export pending changes before moving. This is not a server-side backup of unsent edits.
 
@@ -65,7 +65,7 @@ Browser local storage and IndexedDB are scoped to an **origin**, not a URL path.
 - In browser developer tools, confirm manifest start URL/scope and worker script/scope use the deployment path.
 - Sign in and load Habits and Workouts online. Install from Chrome on Android and Safari's Add to Home Screen on iPhone. If the installed app uses separate storage, sign in and load there too.
 - Disconnect, reopen, edit an existing record, and reopen again. Verify the edit persists. Reconnect and sign in if required; verify the edit reaches the correct Google Sheet.
-- Publish another build. Confirm an existing editor is not force-reloaded; close all controlled clients and reopen to get the new version.
+- Publish another build. Confirm an existing editor is not force-reloaded. Save/close it and choose **Load new version**; also verify that a new opening uses the latest shell with another tab still open.
 
 Automated checks cover worker request behavior, cache isolation, install-event handling, icon dimensions, manifest URLs, and production output at `/`, `/fero-tracker/`, and `/tools/tracker/`. Physical device installation, Google consent, and live account permissions still need a real browser/account check.
 
@@ -80,7 +80,7 @@ Automated checks cover worker request behavior, cache isolation, install-event h
 | No install button on iPhone | Use Safari → Share → Add to Home Screen. The Chromium prompt event is not required there. |
 | Offline cold start fails | Complete an online production visit and wait for the worker to finish installation. Development mode has no offline shell. |
 | First workout visit fails offline | Open Workouts online once in that browser/installed app. |
-| Update seems stuck | Save drafts and close every controlled tab/window, then reopen online. |
+| Update seems stuck | Open online and use Load new version after saving/closing forms. Older clients without this notice need one full close and reopen after downloading. |
 | Pending changes remain | Keep the app open, reconnect, sign in, and check sync errors. Do not clear storage; export a backup. |
 
 References: [Vite static deployment](https://vite.dev/guide/static-deploy.html), [GitHub Pages custom workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages), [Google OAuth client setup](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid), [web app manifests](https://web.dev/learn/pwa/web-app-manifest).

@@ -75,3 +75,18 @@ test('forms, installation instructions and appearance render their selected-lang
     const manage=renderToStaticMarkup(React.createElement(ManageItemModal,{name:'My habit',kind:'habit',renameHelp:'',deleteHelp:'',deleteLabel:'',busy:false,onRename:async()=>{},onDelete:async()=>{},onClose:()=>{}}));assert.ok(manage.includes(locale==='en'?'Edit habit':'Upraviť návyk'));
   }
 });
+
+test('habit and workout views have no language switcher; Settings retains it',()=>{
+  const env=setup();
+  const Tracker=env.load('src/components/Tracker.tsx').Tracker;
+  const Workouts=env.load('src/components/Workouts.tsx').Workouts;
+  for(const component of [Tracker,Workouts]){
+    const html=renderToStaticMarkup(React.createElement(component,{onSignOut:()=>{}}));
+    assert.ok(!html.includes('language-switcher'));assert.ok(!html.includes('aria-label="English"'));
+  }
+  const useHabitStore=selector=>selector({user:{id:'local-fixture',email:'fixture@example.test'},spreadsheetId:null,pendingWrites:0});
+  const settingsLoad=createLoader({mocks:{'../store/useHabitStore':{useHabitStore}}});
+  const Settings=settingsLoad('src/components/Settings.tsx').Settings;
+  const html=renderToStaticMarkup(React.createElement(Settings,{onBusy:()=>{}}));
+  assert.ok(html.includes('language-switcher'));assert.ok(html.includes('aria-label="English"'));
+});

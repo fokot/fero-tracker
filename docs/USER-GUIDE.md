@@ -1,6 +1,6 @@
 # Fero Tracker user guide
 
-Fero Tracker records daily habits and exercise sets. The interface supports Slovak and English; this Markdown guide is in English. Use SK/EN in Settings to switch the app language. The website shares the same remembered language preference. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
+Fero Tracker records daily habits and exercise sets. The interface supports Slovak and English; this Markdown guide is in English. Use SK/EN on login or in Settings to switch the app language. The habit and workout views have no language switcher. The website shares the same remembered language preference. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
 
 ## First use
 
@@ -53,7 +53,7 @@ The queue survives reloads. Explicit sign-out clears the active profile pointer,
 
 ## Updates and troubleshooting
 
-Updates download during online visits. Save any open drafts, then close all tracker tabs and installed windows and reopen. The worker waits for the previous version's windows to close and does not force a reload.
+Updates download during online visits and are checked again when the app returns to the foreground. After the download completes, a new opening uses the latest shell, even if another tab remains open. An already open app offers **Load new version**; save and close open forms before using it. There are no forced reloads, and unfinished local writes prevent an update reload. On older installed versions that lack the notice, open online to download the update, fully close the app, and reopen.
 
 If the first offline visit fails, open the production app online and allow it to finish loading. Installation alone does not fetch every spreadsheet. If Google reports an origin error, ask the deployment owner to check the OAuth origins. If a schema conflict stops synchronization, download a backup and correct duplicate dates or managed headers before retrying.
 

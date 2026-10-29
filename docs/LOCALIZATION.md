@@ -20,7 +20,7 @@ Use named `{parameters}` for complete phrases. Keep the same parameter names in 
 
 ## Runtime
 
-`src/i18n/locale.ts` is independent of React. It detects, persists, and broadcasts language changes. `startLocale()` updates the document's `lang` and follows storage events from other tabs. The React app subscribes through `useLocale()` at its root so switching rerenders labels without remounting editors or discarding drafts. `LanguageSwitcher` is available only in the app’s Settings. The login screen and app header follow the selected language without displaying another switcher.
+`src/i18n/locale.ts` is independent of React. It detects, persists, and broadcasts language changes. `startLocale()` updates the document's `lang` and follows storage events from other tabs. The React app subscribes through `useLocale()` at its root so switching rerenders labels without remounting editors or discarding drafts. `LanguageSwitcher` is available on login and in Settings. The habit/workout header has no language switcher.
 
 The website imports the same locale module. Elements declare `data-message="key"`, `data-message-aria-label="key"`, or `data-message-content="key"`. The document title, metadata, static content, preview labels and current status all update when switching; the preview's values, active tab and offline checkbox remain intact.
 
@@ -36,4 +36,4 @@ Language changes never rename habits or exercises, edit spreadsheets, reconnect 
 
 `npm test` verifies catalog key/parameter parity, browser-language detection, saved choices, blocked storage, cross-tab updates, plural forms, form translations, error translation, and stable spreadsheet schemas/serialization in both languages. `npm run test:pwa` also builds app and website under root and nested paths and checks that all HTML localization slots were resolved.
 
-For a manual check, switch on the website, follow **Open tracker**, and confirm the selected language. Sign in, change it in Settings, reload, and return to the website. On a phone, confirm the switcher and menu fit the screen. Existing PWA installations download updates normally; save drafts, close all app windows/tabs, and reopen to activate an update.
+For a manual check, switch on the website, follow **Open tracker**, and confirm the selected language. Sign in, change it in Settings, reload, and return to the website. On a phone, confirm the switcher and menu fit the screen. Existing PWA installations download updates normally; save and close drafts, then use **Load new version**, or close and reopen the app.

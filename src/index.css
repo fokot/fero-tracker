@@ -294,3 +294,10 @@ button, a, input { scroll-margin-bottom: 100px; }
 .language-switcher { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); flex-shrink: 0; }
 .language-switcher button { min-width: 36px; min-height: 36px; padding: 5px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 650; border-radius: 6px; }
 .language-switcher button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.login-panel > .language-switcher { display: flex; width: max-content; margin: 0 0 28px auto; }
+.pwa-update-notice { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px max(16px, env(safe-area-inset-left, 0px)); background: var(--accent-soft); border-bottom: 1px solid var(--accent-border); }
+.pwa-update-notice p { margin: 0; font-size: 13px; line-height: 1.6; }
+.pwa-update-notice strong, .pwa-update-notice span { display: block; }
+.pwa-update-notice span { color: var(--muted); }
+.pwa-update-notice button { flex-shrink: 0; }
+@media (max-width: 480px) { .pwa-update-notice { align-items: stretch; flex-direction: column; gap: 10px; } .pwa-update-notice button { align-self: flex-start; } }
