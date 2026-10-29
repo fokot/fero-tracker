@@ -1,6 +1,6 @@
 # Fero Tracker user guide
 
-Fero Tracker records daily habits and exercise sets. The interface supports Slovak and English; this Markdown guide is in English. Use SK/EN on login, in the app header, or in Settings to switch. The website shares the same remembered language preference. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
+Fero Tracker records daily habits and exercise sets. The interface supports Slovak and English; this Markdown guide is in English. Use SK/EN in Settings to switch the app language. The website shares the same remembered language preference. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
 
 ## First use
 

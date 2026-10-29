@@ -2,7 +2,7 @@
 
 An installable habit and workout tracker built with React, TypeScript and Zustand, backed by your own Google Sheets. Edits save locally first and synchronize through [Sheetbase](https://github.com/fokot/sheetbase).
 
-The app and presentation/documentation website support Slovak and English. Use the SK/EN switcher on either surface; your choice is shared and remembered in this browser. Translations live in `messages/app.sk.json`, `messages/app.en.json`, `messages/site.sk.json` and `messages/site.en.json`. The website is built alongside the app at `docs/`, with an interactive sample preview, mobile installation steps and setup instructions. See the [localization guide](docs/LOCALIZATION.md) for adding or editing messages.
+The app and presentation/documentation website support Slovak and English. Use the SK/EN switcher in the app’s Settings or in the website header; your choice is shared and remembered in this browser. Translations live in `messages/app.sk.json`, `messages/app.en.json`, `messages/site.sk.json` and `messages/site.en.json`. The website is built alongside the app at `docs/`, with an interactive sample preview, mobile installation steps and setup instructions. See the [localization guide](docs/LOCALIZATION.md) for adding or editing messages.
 
 - [User guide](docs/USER-GUIDE.md): habits, workouts, installation and offline use.
 - [Deployment guide](docs/DEPLOYMENT.md): GitHub Pages, Google configuration, subpaths and PWA updates.
