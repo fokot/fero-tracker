@@ -21,9 +21,8 @@ function switchSetup(prepare=async()=>{}) {
   const values=new Map();let version=0;
   const load=createLoader({globals:{localStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)}},mocks:{
     './sheetConnections':{prepareSheetConnection:prepare},'./googleOAuth':{getAuthVersion:()=>version},
-    './localSync':{canSynchronize:()=>true,requestSync:()=>{}}, './remoteSync':{invalidateRemote:()=>{}},
-    '../lib/localSync':{ensureLocal:()=>new Promise(()=>{}),requestSync:()=>{}},
-    '../lib/localDatabase':{subscribeLocal:()=>()=>{}},
+    './sheetbase':{canSynchronize:()=>true,openTracker:async()=>({key:'key'}),synchronizeRecord:async()=>{}},
+    '../lib/sheetbase':{trackerTable:()=>({key:'key',subscribe:()=>()=>{}}),openTracker:()=>new Promise(()=>{})},
   }});
   const habits=load('src/store/useHabitStore.ts').useHabitStore,workouts=load('src/store/useWorkoutStore.ts').useWorkoutStore;
   const user={id:'user',email:'test@example.com'};

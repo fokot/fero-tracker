@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createLoader, plain } from './load-module.mjs';
+import * as sdk from '@fokot/sheetbase';
 
 const marker = { metadataKey: 'feros-tracker-layout', metadataValue: 'date-rows-v1' };
 export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], legacy = false, existing = 'sheet-1', failDrive = false, failBatch = false, loseBatchResponse = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
@@ -129,6 +130,6 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
     return {spreadsheetId:'sheet-1',sheets:plain(tabs.map(({rows,...metadata})=>metadata))};
   };
   const auth={getAuthVersion:()=>version,getValidAccessToken:()=>'token',SessionExpiredError:class extends Error{}};
-  const sheets=createLoader({mocks:{'./googleApi':{googleRequest:request},'./googleOAuth':auth}})(apiModule);
-  return {sheets,calls,get gridCellsRead(){return gridCellsRead;},get tabs(){return tabs;},get rows(){return get(tabs,0).rows;},get definitions(){return tabs.find((sheet)=>sheet.properties.title==='HabitDefinitions')?.rows;},signOut(){version++;}};
+  const sheets=createLoader({mocks:{'./googleApi':{googleRequest:request},'./googleOAuth':auth,'@fokot/sheetbase':{...sdk,createGoogleSheetsRemote:options=>sdk.createGoogleSheetsRemote({...options,fetch:async(url,init)=>new Response(JSON.stringify(await request(url,init)))})}}})(apiModule);
+  return {sheets,calls,request,get gridCellsRead(){return gridCellsRead;},get tabs(){return tabs;},get rows(){return get(tabs,0).rows;},get definitions(){return tabs.find((sheet)=>sheet.properties.title==='HabitDefinitions')?.rows;},signOut(){version++;}};
 }
