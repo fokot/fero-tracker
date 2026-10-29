@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { create } from 'zustand';
 import type { Columns, Snapshot, Transaction } from '@fokot/sheetbase';
 import { getOrCreateWorkoutSheet } from '../lib/workoutSheets';
@@ -56,12 +57,12 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
       if (!get().pendingWrites) { viewDate = null; attach(id); const version = sessionVersion; void hydrate(version).catch(error => { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }); }
     },
     loadDay: async (date, refresh = false) => {
-      if (!isDateKey(date)) { set({ error: 'Vyber platný dátum.' }); return; }
+      if (!isDateKey(date)) { set({ error: t('error.date') }); return; }
       viewDate = date; const original = sessionVersion; let version = original, discovered = false;
       const user = get().user; if (!user) return;
       try {
         if (!get().spreadsheetId) {
-          if (!useSyncStore.getState().online || useSyncStore.getState().authorizedUserId !== user.id) { set({ error: 'Prvé pripojenie tréningovej tabuľky vyžaduje internet a prihlásenie.', isLoading: false }); return; }
+          if (!useSyncStore.getState().online || useSyncStore.getState().authorizedUserId !== user.id) { set({ error: t('error.firstWorkout'), isLoading: false }); return; }
           set({ isLoading: true, error: null });
           discovery ??= getOrCreateWorkoutSheet(user.email); const pending = discovery;
           let id: string; try { id = await pending; } finally { if (discovery === pending) discovery = null; }
@@ -78,7 +79,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
         const name = validName(input); validateWorkoutSets(captured);
         let exercise = transaction.columns.find(column => column.header.toLowerCase() === name.toLowerCase());
         if (!exercise) {
-          if (!captured.length) throw new Error('Pridaj aspoň jednu sériu.');
+          if (!captured.length) throw new Error(t('error.addSet'));
           exercise = { id: crypto.randomUUID(), header: name, type: 'sets' }; transaction.addColumn(exercise);
         }
         transaction.set(date, { [exercise.id]: captured.length ? captured : null });
@@ -86,7 +87,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
     },
     renameExercise: (date, previousName, input) => mutate(date, transaction => {
       const exercise = transaction.columns.find(column => column.header === previousName);
-      if (!exercise) throw new Error('Cvik už neexistuje.');
+      if (!exercise) throw new Error(t('error.exerciseMissing'));
       transaction.renameColumn(exercise.id, validName(input));
     }),
   };

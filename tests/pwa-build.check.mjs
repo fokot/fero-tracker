@@ -18,6 +18,8 @@ for (const base of ['/', '/fero-tracker/', '/tools/tracker/']) {
       assert.ok(docs.includes('<html lang="en">'));
       assert.ok(docs.includes(`href="${base}"`));
       assert.ok(!app.includes('%BASE_URL%')&&!docs.includes('%BASE_URL%'));
+      assert.ok(!app.includes('{{app.')&&!docs.includes('{{site.'),'all localization slots resolved');
+      assert.ok(docs.includes('data-locale="sk"')&&docs.includes('data-locale="en"'),'both language controls are present');
       for (const html of [app,docs]) for (const [,url] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
         if (!url.startsWith('/') || url.startsWith('//')) continue;
         assert.ok(url.startsWith(base),`${url} escapes ${base}`);

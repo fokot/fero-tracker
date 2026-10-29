@@ -1,6 +1,6 @@
 # Deployment and PWA operations
 
-The app and English documentation are static Vite outputs. No application server or client secret is required. The same artifact supports HTTPS hosts at `/` or an absolute subpath such as `/fero-tracker/` or `/tools/tracker/`.
+The app and bilingual documentation are static Vite outputs. No application server or client secret is required. The same artifact supports HTTPS hosts at `/` or an absolute subpath such as `/fero-tracker/` or `/tools/tracker/`.
 
 ## GitHub Pages
 

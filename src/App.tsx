@@ -1,3 +1,7 @@
+import { translateError } from './i18n/messages';
+import { useLocale } from './i18n/react';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { t } from './i18n/messages';
 import { useEffect, useRef, useState } from 'react';
 import { GoogleButton } from './components/GoogleButton';
 import { Tracker } from './components/Tracker';
@@ -13,6 +17,7 @@ import { useSyncStore } from './store/useSyncStore';
 import { InstallApp } from './components/InstallApp';
 
 function App() {
+  useLocale();
   const user = useHabitStore((state) => state.user);
   const habitsId = useHabitStore((state) => state.spreadsheetId);
   const workoutsId = useWorkoutStore((state) => state.spreadsheetId);
@@ -84,22 +89,23 @@ function App() {
       cancelLogin(); useHabitStore.getState().clearUser(); useWorkoutStore.getState().clearUser(); setError(null);
     } catch (reason) { setError(errorMessage(reason)); }
   };
-  if (restoring) return <div className="login-page"><p role="status">Otváram tvoje záznamy…</p></div>;
+  if (restoring) return <div className="login-page"><p role="status">{t('login.loading')}</p></div>;
   if (user) return <Tracker onSignOut={() => void handleSignOut()} connection={<>
-    {authorizedUserId !== user.id && <section className="connection-banner" aria-label="Synchronizácia s Googlom">
-      <p><strong>{online ? 'Záznamy máš v tomto zariadení.' : 'Si offline. Zapisuj ďalej.'}</strong><span>{online ? 'Pre odoslanie zmien do Google Sheets sa prihlás.' : 'Zmeny sa odošlú po pripojení a prihlásení do Googlu.'}</span></p>
+    {authorizedUserId !== user.id && <section className="connection-banner" aria-label={t('login.syncLabel')}>
+      <p><strong>{online ? t('login.localRecords') : t('login.offline')}</strong><span>{online ? t('login.syncHelp') : t('login.offlineHelp')}</span></p>
       {online && <GoogleButton onLogin={() => void handleLogin()} busy={connecting} />}
-      {connecting && <button className="text-button" onClick={cancelLogin}>Zrušiť prihlásenie</button>}
+      {connecting && <button className="text-button" onClick={cancelLogin}>{t('login.cancel')}</button>}
     </section>}
-    {error && <p role="alert" className="error-banner">{error}</p>}
+    {error && <p role="alert" className="error-banner">{translateError(error)}</p>}
   </>} />;
   return <div className="login-page"><main className="login-panel">
+    <LanguageSwitcher />
     <h1 className="login-title">Fero Tracker</h1>
-    <p className="login-description">Návyky aj tréning. Tvoj každodenný prehľad.</p>
-    {error && <p role="alert" className="mb-4 text-sm text-red-700">{error}</p>}
+    <p className="login-description">{t('login.description')}</p>
+    {error && <p role="alert" className="mb-4 text-sm text-red-700">{translateError(error)}</p>}
     <GoogleButton onLogin={() => void handleLogin()} busy={connecting} />
-    {connecting && <><p role="status" className="text-sm text-gray-600 mt-3">Pripájam Google a načítavam tracker…</p><button onClick={cancelLogin} className="mt-4 text-sm underline text-gray-600">Zrušiť</button></>}
-    <p className="login-footnote">Záznamy sa ukladajú v tomto prehliadači a synchronizujú do tvojich Google tabuliek.</p>
+    {connecting && <><p role="status" className="text-sm text-gray-600 mt-3">{t('login.connecting')}</p><button onClick={cancelLogin} className="mt-4 text-sm underline text-gray-600">{t('common.cancel')}</button></>}
+    <p className="login-footnote">{t('login.footnote')}</p>
     <InstallApp />
   </main></div>;
 }

@@ -1,3 +1,5 @@
+import { translateError, t } from '../i18n/messages';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { useEffect, useRef, useState } from 'react';
 import { getAuthVersion } from '../lib/googleOAuth';
 import { isPickerConfigured, pickGoogleSpreadsheet } from '../lib/googlePicker';
@@ -41,7 +43,7 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
 
   const run = async (kind: TrackerKind, action: (isCurrent: () => boolean) => Promise<void>) => {
     if (running.current || useHabitStore.getState().pendingWrites || useWorkoutStore.getState().pendingWrites) return;
-    if (!canSynchronize(user.id)) { setError('Na zmenu tabuľky sa pripoj na internet a prihlás cez Google.'); return; }
+    if (!canSynchronize(user.id)) { setError(t('error.connectChange')); return; }
     running.current = true;
     const version = getAuthVersion();
     const isCurrent = () => alive.current && version === getAuthVersion() && useHabitStore.getState().user?.id === user.id;
@@ -55,63 +57,66 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
     if (remembered === null || !isCurrent()) return;
     setCurrent((state) => ({ ...state, [kind]: file }));
     setChooser(null); setCandidate(null);
-    setNotice(remembered ? 'Tabuľka je pripojená. Pôvodné dáta zostali zachované.' : 'Tabuľka je pripojená. Prehliadač však nepovolil zapamätanie výberu na ďalšie prihlásenie.');
+    setNotice(remembered ? t('settings.success') : t('settings.rememberFailed'));
   };
 
   return <main id="main-content" className="settings-page">
-    <div className="page-heading"><div><h1>Nastavenia</h1><p className="page-description">Tvoj vzhľad a tvoje tabuľky.</p></div></div>
+    <div className="page-heading"><div><h1>{t('common.settings')}</h1><p className="page-description">{t('settings.description')}</p></div></div>
+    <section className="settings-section" aria-labelledby="language-title">
+      <h2 id="language-title">{t('language.label')}</h2><p className="field-help">{t('language.help')}</p><LanguageSwitcher />
+    </section>
     <Appearance />
     <InstallApp />
     <LocalStorageSettings userId={user.id} />
     <section className="settings-section" aria-labelledby="sheets-title">
       <h2 id="sheets-title">Google Sheets</h2>
-      {!connected && <p className="field-help">Zmenu tabuľky sprístupní internet a prihlásenie cez Google. Lokálne záznamy môžeš upravovať ďalej.</p>}
-      <p className="field-help">Pre návyky a tréningy máš samostatné tabuľky. Zmena pripojenia pôvodné dáta nevymaže ani nepresunie.</p>
+      {!connected && <p className="field-help">{t('settings.offlineHelp')}</p>}
+      <p className="field-help">{t('settings.separate')}</p>
       {(['habits', 'workouts'] as const).map((kind) => {
         const id = kind === 'habits' ? habitId : workoutId;
         const selected = current[kind]?.id === id ? current[kind] : undefined;
-        return <div key={kind} className="sheet-setting" aria-label={kind === 'habits' ? 'Tabuľka návykov' : 'Tabuľka tréningov'}>
-          <div className="sheet-setting-title"><Icon name={kind} size={22} /><h3>{kind === 'habits' ? 'Habits' : 'Workouts'}</h3></div>
-          <p className="connected-sheet">{id ? selected?.name ?? 'Pripojená tabuľka' : 'Zatiaľ bez pripojenej tabuľky'}</p>
+        return <div key={kind} className="sheet-setting" aria-label={kind === 'habits' ? t('settings.habitSheet') : t('settings.workoutSheet')}>
+          <div className="sheet-setting-title"><Icon name={kind} size={22} /><h3>{kind === 'habits' ? t('common.habits') : t('common.workouts')}</h3></div>
+          <p className="connected-sheet">{id ? selected?.name ?? t('settings.connected') : t('settings.noSheet')}</p>
           <div className="sheet-setting-actions">
-            {id && <a className="text-button" href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit`} target="_blank" rel="noreferrer">Otvoriť tabuľku <Icon name="external" size={15} /></a>}
+            {id && <a className="text-button" href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit`} target="_blank" rel="noreferrer">{t('settings.open')} <Icon name="external" size={15} /></a>}
             <button type="button" disabled={!!operation} className="secondary-button" onClick={() => void run(kind, async (isCurrent) => {
               setChooser(kind); setCandidate(null); setLink(''); setFiles([]);
               const list = await listAccessibleSheets();
               if (isCurrent()) setFiles(list);
-            })}>{id ? 'Zmeniť tabuľku' : 'Vybrať tabuľku'}</button>
+            })}>{id ? t('settings.change') : t('settings.choose')}</button>
             <button type="button" disabled={!!operation} className="text-button" onClick={() => void run(kind, async (isCurrent) => {
               const file = await createTrackerSpreadsheet(kind);
               if (isCurrent()) await connect(kind, file, isCurrent);
-            })}>Vytvoriť novú</button>
+            })}>{t('settings.create')}</button>
           </div>
           {chooser === kind && <div className="sheet-chooser">
-            <h4>Vybrať Google Sheet</h4>
-            <p className="field-help">Tu sú tabuľky, ku ktorým už má aplikácia prístup.</p>
-            {operation === kind && <p role="status" className="field-help">Pracujem…</p>}
+            <h4>{t('settings.select')}</h4>
+            <p className="field-help">{t('settings.accessHelp')}</p>
+            {operation === kind && <p role="status" className="field-help">{t('settings.working')}</p>}
             {isPickerConfigured() && <button type="button" disabled={!!operation} className="secondary-button" onClick={() => void run(kind, async (isCurrent) => {
               const picked = await pickGoogleSpreadsheet();
               if (picked && isCurrent()) { const file = await getSpreadsheetInfo(picked.id); if (isCurrent()) setCandidate(file); }
-            })}>Prehliadať Disk Google</button>}
-            <div className="sheet-file-list" role="group" aria-label="Dostupné tabuľky">
+            })}>{t('settings.browse')}</button>}
+            <div className="sheet-file-list" role="group" aria-label={t('settings.available')}>
               {files.map((file) => <button type="button" key={file.id} disabled={!!operation} aria-pressed={candidate?.id === file.id} onClick={() => { setCandidate(file); setError(null); }}><Icon name="sheet" size={20} /><span>{file.name}</span>{candidate?.id === file.id && <Icon name="check" size={18} />}</button>)}
-              {!files.length && !operation && <p className="field-help">Žiadne dostupné tabuľky. Vytvor novú alebo použi odkaz.</p>}
+              {!files.length && !operation && <p className="field-help">{t('settings.empty')}</p>}
             </div>
             <form onSubmit={(event) => { event.preventDefault(); void run(kind, async (isCurrent) => { const file = await getSpreadsheetInfo(spreadsheetIdFromInput(link)); if (isCurrent()) setCandidate(file); }); }}>
-              <label className="field-label" htmlFor={`sheet-link-${kind}`}>Odkaz na Google Sheet</label>
+              <label className="field-label" htmlFor={`sheet-link-${kind}`}>{t('settings.link')}</label>
               <input className="form-input" id={`sheet-link-${kind}`} value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" disabled={!!operation} />
-              <p className="field-help">Odkaz funguje pri tabuľke, ku ktorej už má aplikácia povolený prístup.</p>
-              <button className="text-button" disabled={!!operation || !link.trim()}>Overiť odkaz</button>
+              <p className="field-help">{t('settings.linkHelp')}</p>
+              <button className="text-button" disabled={!!operation || !link.trim()}>{t('settings.verify')}</button>
             </form>
-            {candidate && <div className="sheet-candidate"><strong>{candidate.name}</strong><p className="field-help">{kind === 'habits' ? 'Použijú sa listy Habits a HabitDefinitions. Chýbajúce listy sa vytvoria.' : 'Použije sa list Workouts. Ak chýba, vytvorí sa.'} Ostatné listy zostanú zachované.</p><button type="button" className="primary-button" disabled={!!operation} onClick={() => void run(kind, async (isCurrent) => {
+            {candidate && <div className="sheet-candidate"><strong>{candidate.name}</strong><p className="field-help">{kind === 'habits' ? t('settings.habitTabs') : t('settings.workoutTabs')}  {t('settings.preserve')}</p><button type="button" className="primary-button" disabled={!!operation} onClick={() => void run(kind, async (isCurrent) => {
               const verified = await getSpreadsheetInfo(candidate.id);
               if (isCurrent()) await connect(kind, verified, isCurrent);
-            })}>Použiť túto tabuľku</button></div>}
-            <button type="button" className="text-button" disabled={!!operation} onClick={() => { setChooser(null); setCandidate(null); setError(null); }}>Zrušiť výber</button>
+            })}>{t('settings.use')}</button></div>}
+            <button type="button" className="text-button" disabled={!!operation} onClick={() => { setChooser(null); setCandidate(null); setError(null); }}>{t('settings.cancel')}</button>
           </div>}
         </div>;
       })}
-      {error && <p role="alert" className="form-error">{error}</p>}
+      {error && <p role="alert" className="form-error">{translateError(error)}</p>}
       {notice && <p role="status" className="field-help">{notice}</p>}
     </section>
   </main>;

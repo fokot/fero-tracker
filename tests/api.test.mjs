@@ -8,7 +8,7 @@ function setup(fetch) {
     getValidAccessToken: () => 'memory-token', getAuthVersion: () => version,
     expireSession() { expired = true; }, SessionExpiredError: class extends Error {},
   };
-  const { googleRequest } = createLoader({ globals: { fetch }, mocks: { './googleOAuth': auth } })('src/lib/googleApi.ts');
+  const { googleRequest } = createLoader({ locale: 'en', globals: { fetch }, mocks: { './googleOAuth': auth } })('src/lib/googleApi.ts');
   return { googleRequest, get expired() { return expired; }, changeAccount() { version++; } };
 }
 test('API sends bearer authorization and surfaces Google errors', async () => {

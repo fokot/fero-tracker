@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { googleRequest } from './googleApi';
 import { prepareTrackerSheet } from './sheetSetup';
 import { SHEETS, post, rowData, serialize, trackerSheetName, type Spreadsheet } from './googleSheetsClient';
@@ -19,7 +20,7 @@ export async function getOrCreateWorkoutSheet(email: string): Promise<string> {
         data: [{ rowData: rowData([['Date']]) }],
       }],
     }));
-    if (!created.spreadsheetId) throw new Error('Google nevrátil ID tréningového spreadsheetu.');
+    if (!created.spreadsheetId) throw new Error(t('error.workoutId'));
     return created.spreadsheetId;
   });
 }

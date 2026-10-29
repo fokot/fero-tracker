@@ -12,7 +12,7 @@ function setup({ loaded = true } = {}) {
     oauth2: { initTokenClient(config) { tokenConfig = config; return { requestAccessToken(config) { tokenRequests++; requested = config; } }; } },
   } };
   const window = { google: loaded ? google : undefined, dispatchEvent(event) { events.push(event.type); } };
-  const load = createLoader({ globals: { window, document: { createElement() { return { remove() {} }; }, head: { appendChild(script) { scripts.push(script); } } },
+  const load = createLoader({ locale: 'en', globals: { window, document: { createElement() { return { remove() {} }; }, head: { appendChild(script) { scripts.push(script); } } },
     setTimeout(fn) { const id = ++timerId; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); } } });
   const auth = load('src/lib/googleOAuth.ts');
   return { auth, window, google, scripts, timers, events,

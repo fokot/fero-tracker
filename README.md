@@ -2,7 +2,7 @@
 
 An installable habit and workout tracker built with React, TypeScript and Zustand, backed by your own Google Sheets. Edits save locally first and synchronize through [Sheetbase](https://github.com/fokot/sheetbase).
 
-The app interface is in Slovak. The English presentation and documentation website is built alongside the app at `docs/`, with an interactive sample preview, mobile installation steps, and setup instructions.
+The app and presentation/documentation website support Slovak and English. Use the SK/EN switcher on either surface; your choice is shared and remembered in this browser. Translations live in `messages/app.sk.json`, `messages/app.en.json`, `messages/site.sk.json` and `messages/site.en.json`. The website is built alongside the app at `docs/`, with an interactive sample preview, mobile installation steps and setup instructions. See the [localization guide](docs/LOCALIZATION.md) for adding or editing messages.
 
 - [User guide](docs/USER-GUIDE.md): habits, workouts, installation and offline use.
 - [Deployment guide](docs/DEPLOYMENT.md): GitHub Pages, Google configuration, subpaths and PWA updates.
@@ -12,7 +12,7 @@ The app interface is in Slovak. The English presentation and documentation websi
 
 Open the production app in Chrome on Android and use **Nainštalovať aplikáciu** when offered, or choose **Install app** from the browser menu. On iPhone, open it in Safari → **Share → Add to Home Screen**. Sign in and load both trackers online before relying on offline use. Installed apps can have separate browser storage, so complete this first load inside the installed app too.
 
-GitHub Pages can host the app at `https://fokot.github.io/fero-tracker/` and the English website at `https://fokot.github.io/fero-tracker/docs/`. Enable **Settings → Pages → GitHub Actions**, add the Actions repository variable `VITE_GOOGLE_CLIENT_ID`, and authorize `https://fokot.github.io` (without a path) in the Google OAuth client. Push to `main` or manually run **Deploy app and documentation**. The workflow determines the Pages path automatically. See the [complete deployment steps](docs/DEPLOYMENT.md).
+GitHub Pages can host the app at `https://fokot.github.io/fero-tracker/` and the bilingual website at `https://fokot.github.io/fero-tracker/docs/`. Enable **Settings → Pages → GitHub Actions**, add the Actions repository variable `VITE_GOOGLE_CLIENT_ID`, and authorize `https://fokot.github.io` (without a path) in the Google OAuth client. Push to `main` or manually run **Deploy app and documentation**. The workflow determines the Pages path automatically. See the [complete deployment steps](docs/DEPLOYMENT.md).
 
 To verify a project-path deployment locally:
 

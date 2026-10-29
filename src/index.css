@@ -290,3 +290,15 @@ button, a, input { scroll-margin-bottom: 100px; }
 .habit-summary > p { flex-shrink: 0; }
 .local-queue-item { border-top: 1px solid var(--line); padding-block: 6px; }
 .local-queue-item .text-button { white-space: normal; display: inline-flex; align-items: center; }
+
+.language-switcher { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); flex-shrink: 0; }
+.language-switcher button { min-width: 36px; min-height: 36px; padding: 5px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 650; border-radius: 6px; }
+.language-switcher button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.login-panel > .language-switcher { display: flex; width: max-content; margin: 0 0 28px auto; }
+.app-header .language-switcher button { min-width: 30px; }
+@media (max-width: 380px) {
+  .app-header { gap: 8px; }
+  .app-header .brand { font-size: 18px; }
+  .app-header .account-avatar { display: none; }
+  .app-header .language-switcher button { min-width: 27px; }
+}

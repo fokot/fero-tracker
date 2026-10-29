@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { create } from 'zustand';
 import type { Columns, Snapshot, Transaction } from '@fokot/sheetbase';
 import { errorMessage, type Habit, type HabitType, type HabitValues, type User } from '../lib/types';
@@ -61,17 +62,17 @@ export const useHabitStore = create<HabitStore>((set, get) => {
     renameHabit: (id, name) => mutate(transaction => transaction.renameColumn(id, validName(name))),
     deleteHabit: id => mutate(transaction => transaction.removeColumn(id)),
     toggleHabit: (name, date) => mutate(transaction => {
-      if (!isDateKey(date)) throw new Error('Vyber platný dátum.');
+      if (!isDateKey(date)) throw new Error(t('error.date'));
       const habit = transaction.columns.find(column => column.header === name && column.type === 'boolean');
-      if (!habit) throw new Error('Návyk už neexistuje.');
+      if (!habit) throw new Error(t('error.habitMissing'));
       transaction.set(date, { [habit.id]: transaction.get(date)?.values[habit.id] === true ? null : true });
     }),
     setNumericValue: (name, date, input) => mutate(transaction => {
-      if (!isDateKey(date)) throw new Error('Vyber platný dátum.');
+      if (!isDateKey(date)) throw new Error(t('error.date'));
       const habit = transaction.columns.find(column => column.header === name && column.type === 'numeric');
-      if (!habit) throw new Error('Návyk už neexistuje.');
+      if (!habit) throw new Error(t('error.habitMissing'));
       const text = input.trim();
-      if (text && !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) throw new Error('Zadaj platné číslo alebo nechaj pole prázdne.');
+      if (text && !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) throw new Error(t('error.number'));
       transaction.set(date, { [habit.id]: text ? Number(text) : null });
     }),
   };

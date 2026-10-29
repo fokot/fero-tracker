@@ -1,6 +1,6 @@
 # Architecture
 
-Fero Tracker is a React/TypeScript application with Zustand stores and a Google Sheets backend owned by the signed-in user. Vite builds two HTML entry points: the app (`index.html`) and an English presentation/documentation site (`docs/index.html`). Both deploy in one static artifact under the same configurable base path.
+Fero Tracker is a React/TypeScript application with Zustand stores and a Google Sheets backend owned by the signed-in user. Vite builds two HTML entry points: the app (`index.html`) and a bilingual presentation/documentation site (`docs/index.html`). Both deploy in one static artifact under the same configurable base path.
 
 ## Application responsibilities
 
@@ -36,3 +36,7 @@ Browser record storage is origin-scoped. Separate deployments on different paths
 - `.github/workflows/ci.yml` runs these checks for pull requests and `main`; `pages.yml` validates and publishes the same artifact after Google configuration is supplied.
 
 The tests do not replace physical iPhone/Android installation or end-to-end Google consent and live Sheets verification.
+
+## Localization
+
+`messages/app.{sk,en}.json` and `messages/site.{sk,en}.json` contain the two language catalogs. `src/i18n/locale.ts` shares a saved language across the app and site; labels update without resetting forms or data. Display dates/numbers follow the selected locale while spreadsheet identifiers and serialization stay stable. See [Localization](LOCALIZATION.md).

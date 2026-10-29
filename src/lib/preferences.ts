@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type TrackerKind = 'habits' | 'workouts';
 export interface SheetChoice { id: string; name: string }
@@ -40,5 +41,5 @@ export function spreadsheetIdFromInput(input: string): string {
       if (match && match[1] !== 'e') return match[1];
     }
   } catch { /* Show the same validation error for malformed URLs. */ }
-  throw new Error('Vlož odkaz na Google Sheet alebo jeho ID.');
+  throw new Error(t('error.sheetLink'));
 }

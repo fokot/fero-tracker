@@ -1,3 +1,4 @@
+import { translateError, t } from '../i18n/messages';
 import { useEffect, useState } from 'react';
 import type { StoredTable } from '@fokot/sheetbase';
 import { trackerStorage, wakeSynchronization } from '../lib/sheetbase';
@@ -27,18 +28,18 @@ export function LocalStorageSettings({ userId }: { userId: string }) {
     } catch (reason) { setError(errorMessage(reason)); }
   };
   return <section className="settings-section" aria-labelledby="local-title">
-    <h2 id="local-title">Lokálne záznamy</h2>
-    <p className="field-help">Úpravy sa najprv uložia v tomto prehliadači. Do Google Sheets sa odošlú na pozadí, keď máš spojenie a platné prihlásenie.</p>
-    <p className="field-help">{pending.length ? 'Tieto tabuľky ešte čakajú na synchronizáciu. Aj po zmene pripojenia sa úpravy odošlú do pôvodnej tabuľky.' : 'Žiadne čakajúce zmeny.'}</p>
+    <h2 id="local-title">{t('local.title')}</h2>
+    <p className="field-help">{t('local.help')}</p>
+    <p className="field-help">{pending.length ? t('local.pendingHelp') : t('local.empty')}</p>
     {pending.map((record) => <div className="local-queue-item" key={record.key}>
-      <a className="text-button" href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(record.target.spreadsheetId)}/edit`} target="_blank" rel="noreferrer">{record.target.sheet === 'Habits' ? 'Návyky' : 'Workouts'} · {record.operations.length} čakajúcich zmien</a>
-      {record.error?.message && <p className="field-help">{record.error?.message}</p>}
+      <a className="text-button" href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(record.target.spreadsheetId)}/edit`} target="_blank" rel="noreferrer">{record.target.sheet === 'Habits' ? t('common.habits') : t('common.workouts')} · {t('local.pending', { count: record.operations.length })}</a>
+      {record.error?.message && <p className="field-help">{translateError(record.error.message)}</p>}
     </div>)}
     <div className="sheet-setting-actions">
-      {!!pending.length && <button className="secondary-button" disabled={!online || authorizedUserId !== userId} onClick={() => void wakeSynchronization()}>Synchronizovať</button>}
-      <button className="text-button" disabled={!records.length} onClick={() => void download()}>Stiahnuť lokálnu zálohu</button>
+      {!!pending.length && <button className="secondary-button" disabled={!online || authorizedUserId !== userId} onClick={() => void wakeSynchronization()}>{t('local.sync')}</button>}
+      <button className="text-button" disabled={!records.length} onClick={() => void download()}>{t('local.backup')}</button>
     </div>
-    <p className="field-help">Záloha obsahuje aj neodoslané zmeny. Vymazanie dát webu v prehliadači odstráni jeho lokálne záznamy.</p>
-    {error && <p role="alert" className="form-error">{error}</p>}
+    <p className="field-help">{t('local.backupHelp')}</p>
+    {error && <p role="alert" className="form-error">{translateError(error)}</p>}
   </section>;
 }

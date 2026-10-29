@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { googleRequest } from './googleApi';
 import { prepareTrackerSheet } from './sheetSetup';
 import type { User } from './types';
@@ -5,7 +6,7 @@ import { SHEETS, post, rowData, serialize, trackerSheetName, type Spreadsheet } 
 
 export async function getAuthorizedUser(): Promise<User> {
   const data = await googleRequest<{ sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string }>('https://openidconnect.googleapis.com/v1/userinfo');
-  if (!data.sub || !data.email || data.email_verified !== true) throw new Error('Google did not return a verified account. Please sign in again.');
+  if (!data.sub || !data.email || data.email_verified !== true) throw new Error(t('error.googleAccount'));
   return { id: data.sub, email: data.email, name: data.name, picture: data.picture };
 }
 export function getSheetName(email: string): Promise<string> {
@@ -28,7 +29,7 @@ export async function getOrCreateUserSheet(email: string): Promise<string> {
         data: [{ rowData: rowData([['Date']]) }],
       }],
     }));
-    if (!created.spreadsheetId) throw new Error('Google did not return a spreadsheet ID.');
+    if (!created.spreadsheetId) throw new Error(t('error.googleSheetId'));
     return created.spreadsheetId;
   });
 }

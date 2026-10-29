@@ -1,3 +1,4 @@
+import { translateError, t } from '../i18n/messages';
 import { useSyncStore } from '../store/useSyncStore';
 import { synchronizeRecord } from '../lib/sheetbase';
 
@@ -10,16 +11,16 @@ export function SyncStatus({ localKey, pendingWrites, queuedWrites, syncError, s
   const working = !!localKey && syncing.includes(localKey);
   const problem = syncError || error;
   const pending = pendingWrites > 0 || queuedWrites > 0 || !online || !authorizedUserId || working;
-  const label = pendingWrites ? 'Ukladám do zariadenia…'
-    : !ready ? online && authorizedUserId ? problem ? 'Načítanie zlyhalo' : 'Načítavam z Googlu…' : 'Prvé načítanie vyžaduje pripojenie'
-    : !online ? `Offline · uložené v zariadení${queuedWrites ? ` (${queuedWrites})` : ''}`
-    : problem ? 'Uložené v zariadení · sync zlyhal'
-    : !authorizedUserId ? 'Uložené v zariadení'
-    : working ? 'Synchronizujem…'
-    : queuedWrites ? `Čaká na synchronizáciu (${queuedWrites})`
-    : syncedAt ? 'Synchronizované' : 'Uložené v zariadení';
+  const label = pendingWrites ? t('sync.saving')
+    : !ready ? online && authorizedUserId ? problem ? t('sync.failedLoad') : t('sync.loading') : t('sync.firstLoad')
+    : !online ? `${t('sync.offline')}${queuedWrites ? ` (${queuedWrites})` : ''}`
+    : problem ? t('sync.failed')
+    : !authorizedUserId ? t('sync.local')
+    : working ? t('sync.working')
+    : queuedWrites ? t('sync.waiting', { count: queuedWrites })
+    : syncedAt ? t('sync.done') : t('sync.local');
   return <div className="sync-detail">
     <span role="status" aria-live="polite" className={`sync-status ${problem ? 'has-error' : ''}`}><span className={`status-dot ${pending ? 'is-pending' : ''}`} />{label}</span>
-    {problem && <details className="sync-problem"><summary>Podrobnosti</summary><p>{problem}</p><p>Neodoslané zmeny zostali v tomto prehliadači.</p>{localKey && online && authorizedUserId && <button type="button" className="text-button" disabled={working} onClick={() => void synchronizeRecord(localKey, true)}>Skúsiť synchronizovať znova</button>}</details>}
+    {problem && <details className="sync-problem"><summary>{t('common.details')}</summary><p>{translateError(problem)}</p><p>{t('sync.retained')}</p>{localKey && online && authorizedUserId && <button type="button" className="text-button" disabled={working} onClick={() => void synchronizeRecord(localKey, true)}>{t('sync.retry')}</button>}</details>}
   </div>;
 }

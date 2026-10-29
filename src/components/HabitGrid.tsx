@@ -1,3 +1,5 @@
+import { translateError, t } from '../i18n/messages';
+import { localeTag } from '../i18n/locale';
 import { SyncStatus } from './SyncStatus';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useHabitStore } from '../store/useHabitStore';
@@ -64,82 +66,83 @@ export function HabitGrid() {
     if (busy) return;
     setFormError(null);
     if (await addHabit(name, type)) { setAdding(false); setName(''); setType('boolean'); }
-    else setFormError(useHabitStore.getState().error ?? 'Návyk sa nepodarilo uložiť. Skús to znova.');
+    else setFormError(useHabitStore.getState().error ?? t('habits.saveFailed'));
   };
   const submitNumber = async (event: FormEvent) => {
     event.preventDefault();
     if (!editing || busy) return;
     setFormError(null);
     if (await setNumericValue(editing.name, editing.date, number)) setEditing(null);
-    else setFormError(useHabitStore.getState().error ?? 'Hodnotu sa nepodarilo uložiť. Skús to znova.');
+    else setFormError(useHabitStore.getState().error ?? t('habits.valueFailed'));
   };
 
   return <main id="main-content" className="habits-page">
     <div className="page-heading">
-      <div><h1>Návyky</h1><p className="page-description">Malé kroky. Každý deň.</p></div>
-      <button className="primary-button heading-action" onClick={() => { setAdding(true); setFormError(null); }} disabled={busy} aria-label="Add habit"><Icon name="plus" size={19} /><span>Pridať návyk</span></button>
+      <div><h1>{t('common.habits')}</h1><p className="page-description">{t('habits.description')}</p></div>
+      <button className="primary-button heading-action" onClick={() => { setAdding(true); setFormError(null); }} disabled={busy} aria-label={t('habits.add')}><Icon name="plus" size={19} /><span>{t('habits.add')}</span></button>
     </div>
     <div className="habit-summary">
-      <p><strong>{completed}<span>/{habits.length}</span></strong><span> dnes zaznamenané</span></p>
+      <p><strong>{completed}<span>/{habits.length}</span></strong><span>  {t('habits.recorded')}</span></p>
       <SyncStatus {...{localKey, pendingWrites, queuedWrites, syncError, syncedAt}} ready={hasLoaded} />
     </div>
     <div className="calendar-toolbar">
-      <div className="calendar-period"><strong>{dates[30].toLocaleDateString('sk-SK', { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title="Prejsť na dnešný dátum"><Icon name="today" size={17} />Dnes</button></div>
+      <div className="calendar-period"><strong>{dates[30].toLocaleDateString(localeTag(), { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title={t('common.goToday')}><Icon name="today" size={17} />{t('common.today')}</button></div>
       <div className="toolbar-actions">
-        {spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Open Google Sheet" title="Otvoriť Google Sheet"><Icon name="external" size={18} /></a>}
-        <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1], true)} className="icon-button" aria-label="Refresh" title="Obnoviť"><Icon name="refresh" size={18} /></button>
+        {spreadsheetId && <a href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`} target="_blank" rel="noreferrer" className="icon-button" aria-label={t('common.openSheet')} title={t('common.openSheet')}><Icon name="external" size={18} /></a>}
+        <button disabled={syncing} onClick={() => void loadHabitsAndValues(dates[0], dates[dates.length - 1], true)} className="icon-button" aria-label={t('common.refresh')} title={t('common.refresh')}><Icon name="refresh" size={18} /></button>
       </div>
     </div>
-    {error && <p role="alert" className="error-banner">{error}</p>}
-    {!habits.length ? <div className="empty-state"><Icon name="habits" size={32} /><h2>{!spreadsheetId ? 'Pripoj svoju tabuľku' : hasLoaded ? 'Začni jedným návykom' : error ? 'Skús obnoviť svoje návyky' : 'Načítavam návyky…'}</h2>{!spreadsheetId ? <p>V nastaveniach vyber Google Sheet alebo vytvor nový.</p> : hasLoaded && <p>Pridaj to, čomu chceš venovať čas každý deň.</p>}</div> :
-      <div ref={calendar} className="habit-calendar" tabIndex={0} aria-label="Habit calendar, scroll horizontally for more dates">
+    {error && <p role="alert" className="error-banner">{translateError(error)}</p>}
+    {!habits.length ? <div className="empty-state"><Icon name="habits" size={32} /><h2>{!spreadsheetId ? t('habits.connect') : hasLoaded ? t('habits.start') : error ? t('habits.retry') : t('habits.loading')}</h2>{!spreadsheetId ? <p>{t('habits.connectHelp')}</p> : hasLoaded && <p>{t('habits.emptyHelp')}</p>}</div> :
+      <div ref={calendar} className="habit-calendar" tabIndex={0} aria-label={t('habits.calendar')}>
         <table className="habit-table">
-          <caption className="sr-only">Daily habits, from {dateKey(dates[0])} to {dateKey(dates[dates.length - 1])}</caption>
+          <caption className="sr-only">{t('habits.caption', { from: dateKey(dates[0]), to: dateKey(dates[dates.length - 1]) })}</caption>
           <thead><tr>
-            <th scope="col" className="habit-name habit-corner">Tvoje návyky</th>
+            <th scope="col" className="habit-name habit-corner">{t('habits.yours')}</th>
             {dates.map((date) => { const key = dateKey(date); return <th key={key} scope="col" aria-current={key === today ? 'date' : undefined} className={`habit-date ${key === today ? 'is-today' : ''}`}>
-              <time dateTime={key}><span>{date.toLocaleDateString('sk-SK', { weekday: 'short' }).replace('.', '')}</span><strong>{date.getDate()}</strong></time>
+              <time dateTime={key}><span>{date.toLocaleDateString(localeTag(), { weekday: 'short' }).replace('.', '')}</span><strong>{date.getDate()}</strong></time>
             </th>; })}
           </tr></thead>
           <tbody>{habits.map((habit) => <tr key={habit.id}>
-            <th scope="row" className="habit-name"><EditableName name={habit.name} kind="návyk" disabled={busy} onOpen={() => setManagingId(habit.id)} /></th>
+            <th scope="row" className="habit-name"><EditableName name={habit.name} kind="habit" disabled={busy} onOpen={() => setManagingId(habit.id)} /></th>
             {dates.map((date) => {
               const key = dateKey(date), value = habitValues[key]?.[habit.name] ?? '';
+              const displayValue = habit.type === 'numeric' && value !== '' ? Number(value).toLocaleString(localeTag(), { maximumFractionDigits: 10 }) : value;
               return <td key={key} className={key === today ? 'is-today' : ''}>
-                <button disabled={busy} aria-label={`${habit.name}, ${key}: ${value || 'empty'}`} aria-pressed={habit.type === 'boolean' ? value === '✓' : undefined}
+                <button disabled={busy} aria-label={`${habit.name}, ${key}: ${displayValue || t('common.empty')}`} aria-pressed={habit.type === 'boolean' ? value === '✓' : undefined}
                   onClick={() => {
                     if (habit.type === 'boolean') void toggleHabit(habit.name, key);
                     else { setEditing({ name: habit.name, date: key }); setNumber(value); setFormError(null); }
                   }} className={`habit-cell ${value === '✓' ? 'is-checked' : value ? 'has-value' : ''}`}>
-                  {value === '✓' ? <Icon name="check" size={19} /> : value || <span className="empty-mark">·</span>}
+                  {value === '✓' ? <Icon name="check" size={19} /> : displayValue || <span className="empty-mark">·</span>}
                 </button>
               </td>;
             })}
           </tr>)}</tbody>
         </table>
       </div>}
-    {managingHabit && <ManageItemModal name={managingHabit.name} kind="návyk" busy={syncing} onClose={close}
-      renameHelp="Nový názov sa použije vo všetkých dňoch. Záznamy zostanú zachované."
-      deleteHelp="Vymaže sa tento návyk aj všetky jeho záznamy zo všetkých dní. Ostatné návyky zostanú zachované." deleteLabel="Vymazať návyk"
-      onRename={async (nextName) => { if (!await renameHabit(managingHabit.id, nextName)) throw new Error(useHabitStore.getState().error ?? 'Návyk sa nepodarilo premenovať.'); }}
-      onDelete={async () => { if (!await deleteHabit(managingHabit.id)) throw new Error(useHabitStore.getState().error ?? 'Návyk sa nepodarilo vymazať.'); }} />}
-    {adding && <Modal title="Pridať návyk" onClose={close}>
+    {managingHabit && <ManageItemModal name={managingHabit.name} kind="habit" busy={syncing} onClose={close}
+      renameHelp={t('habits.renameHelp')}
+      deleteHelp={t('habits.deleteHelp')} deleteLabel={t('habits.delete')}
+      onRename={async (nextName) => { if (!await renameHabit(managingHabit.id, nextName)) throw new Error(useHabitStore.getState().error ?? t('habits.renameFailed')); }}
+      onDelete={async () => { if (!await deleteHabit(managingHabit.id)) throw new Error(useHabitStore.getState().error ?? t('habits.deleteFailed')); }} />}
+    {adding && <Modal title={t('habits.add')} onClose={close}>
       <form onSubmit={(event) => void submitHabit(event)}>
-        <label htmlFor="habit-name" className="field-label">Názov návyku</label>
-        <input id="habit-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoFocus disabled={busy} className="form-input" placeholder="Napr. Ranná prechádzka" />
-        <label htmlFor="habit-type" className="field-label">Typ návyku</label>
-        <select id="habit-type" value={type} onChange={(event) => setType(event.target.value as HabitType)} disabled={busy} className="form-input"><option value="boolean">Zaškrtnutie</option><option value="numeric">Číslo</option></select>
-        {formError && <p role="alert" className="form-error">{formError}</p>}
-        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">Zrušiť</button><button disabled={busy || !name.trim()} className="primary-button">{pendingWrites ? 'Ukladám…' : 'Pridať návyk'}</button></div>
+        <label htmlFor="habit-name" className="field-label">{t('habits.name')}</label>
+        <input id="habit-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoFocus disabled={busy} className="form-input" placeholder={t('habits.placeholder')} />
+        <label htmlFor="habit-type" className="field-label">{t('habits.type')}</label>
+        <select id="habit-type" value={type} onChange={(event) => setType(event.target.value as HabitType)} disabled={busy} className="form-input"><option value="boolean">{t('habits.checkmark')}</option><option value="numeric">{t('habits.number')}</option></select>
+        {formError && <p role="alert" className="form-error">{translateError(formError)}</p>}
+        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">{t('common.cancel')}</button><button disabled={busy || !name.trim()} className="primary-button">{pendingWrites ? t('common.saving') : t('habits.add')}</button></div>
       </form>
     </Modal>}
     {editing && <Modal title={editing.name} onClose={close}>
       <form onSubmit={(event) => void submitNumber(event)}>
-        <p className="form-context">{editing.date}</p><label htmlFor="habit-value" className="field-label">Hodnota</label>
+        <p className="form-context">{editing.date}</p><label htmlFor="habit-value" className="field-label">{t('common.value')}</label>
         <input id="habit-value" type="number" inputMode="decimal" step="any" autoFocus value={number} onChange={(event) => setNumber(event.target.value)} disabled={busy} className="form-input" />
-        <p className="field-help">Prázdne pole vymaže uloženú hodnotu.</p>
-        {formError && <p role="alert" className="form-error">{formError}</p>}
-        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">Zrušiť</button><button disabled={busy} className="primary-button">{pendingWrites ? 'Ukladám…' : 'Uložiť'}</button></div>
+        <p className="field-help">{t('habits.clearHelp')}</p>
+        {formError && <p role="alert" className="form-error">{translateError(formError)}</p>}
+        <div className="form-actions"><button type="button" onClick={close} disabled={busy} className="secondary-button">{t('common.cancel')}</button><button disabled={busy} className="primary-button">{pendingWrites ? t('common.saving') : t('common.save')}</button></div>
       </form>
     </Modal>}
   </main>;

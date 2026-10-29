@@ -1,3 +1,4 @@
+import { translateError, t } from '../i18n/messages';
 import { useId, useState, type FormEvent } from 'react';
 import { errorMessage } from '../lib/types';
 import { Modal } from './Modal';
@@ -5,7 +6,7 @@ import { Icon } from './Icon';
 
 interface Props {
   name: string;
-  kind: 'návyk' | 'cvik';
+  kind: 'habit' | 'exercise';
   renameHelp: string;
   deleteHelp: string;
   deleteLabel: string;
@@ -28,22 +29,22 @@ export function ManageItemModal({ name, kind, renameHelp, deleteHelp, deleteLabe
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!draft.trim()) { setError('Zadaj názov.'); return; }
+    if (!draft.trim()) { setError(t('error.name')); return; }
     void run(() => onRename(draft.trim()));
   };
-  return <Modal title={confirming ? `Vymazať ${kind}?` : `Upraviť ${kind}`} onClose={onClose}>
+  return <Modal title={confirming ? t(kind === 'habit' ? 'manage.deleteHabit' : 'manage.deleteExercise') : t(kind === 'habit' ? 'manage.editHabit' : 'manage.editExercise')} onClose={onClose}>
     {confirming ? <div>
       <p className="manage-item-name">{name}</p>
       <p className="field-help">{deleteHelp}</p>
-      {error && <p role="alert" className="form-error">{error}</p>}
-      <div className="form-actions"><button type="button" autoFocus onClick={() => { setConfirming(false); setError(null); }} disabled={busy} className="secondary-button">Späť</button><button type="button" disabled={busy} onClick={() => void run(onDelete)} className="danger-button">{busy ? 'Mažem…' : deleteLabel}</button></div>
+      {error && <p role="alert" className="form-error">{translateError(error)}</p>}
+      <div className="form-actions"><button type="button" autoFocus onClick={() => { setConfirming(false); setError(null); }} disabled={busy} className="secondary-button">{t('common.back')}</button><button type="button" disabled={busy} onClick={() => void run(onDelete)} className="danger-button">{busy ? t('common.deleting') : deleteLabel}</button></div>
     </div> : <>
       <form onSubmit={submit}>
-        <label htmlFor={inputId} className="field-label">{kind === 'návyk' ? 'Názov návyku' : 'Názov cviku'}</label>
+        <label htmlFor={inputId} className="field-label">{kind === 'habit' ? t('habits.name') : t('workouts.name')}</label>
         <input id={inputId} className="form-input" value={draft} onChange={(event) => setDraft(event.target.value)} required maxLength={100} disabled={busy} />
         <p className="field-help">{renameHelp}</p>
-        {error && <p role="alert" className="form-error">{error}</p>}
-        <div className="form-actions"><button type="button" onClick={onClose} disabled={busy} className="secondary-button">Zrušiť</button><button disabled={busy || !draft.trim() || draft.trim() === name} className="primary-button">{busy ? 'Ukladám…' : 'Premenovať'}</button></div>
+        {error && <p role="alert" className="form-error">{translateError(error)}</p>}
+        <div className="form-actions"><button type="button" onClick={onClose} disabled={busy} className="secondary-button">{t('common.cancel')}</button><button disabled={busy || !draft.trim() || draft.trim() === name} className="primary-button">{busy ? t('common.saving') : t('common.rename')}</button></div>
       </form>
       <div className="manage-delete"><button type="button" className="delete-link" disabled={busy} onClick={() => { setConfirming(true); setError(null); }}><Icon name="trash" size={18} />{deleteLabel}</button></div>
     </>}

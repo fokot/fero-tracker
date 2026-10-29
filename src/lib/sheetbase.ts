@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { createGoogleSheetsRemote, createIndexedDBStorage, createSheetbase, SheetbaseError, type Columns, type SheetTable, type Storage } from '@fokot/sheetbase';
 import { getAuthVersion, getValidAccessToken } from './googleOAuth';
 import { trackerDefinition } from './trackerSchema';
@@ -12,16 +13,16 @@ const clients = new Map<string, ReturnType<typeof createSheetbase>>();
 const tables = new Map<string, TrackerTable>();
 const openings = new Map<string, Promise<TrackerTable>>();
 let authorizedVersion = -1;
-export const validName = (input: string) => { const name = input.trim(); if (!name || name.length > 100) throw new Error('Názov musí mať 1 až 100 znakov.'); return name; };
+export const validName = (input: string) => { const name = input.trim(); if (!name || name.length > 100) throw new Error(t('error.nameLength')); return name; };
 export function canSynchronize(userId: string): boolean {
   const state = useSyncStore.getState(); return state.online && state.authorizedUserId === userId && authorizedVersion === getAuthVersion();
 }
 function clientFor(accountId: string) {
   let client = clients.get(accountId); if (client) return client;
   const remote = createGoogleSheetsRemote({ getCredentials: () => {
-    if (!canSynchronize(accountId)) throw new SheetbaseError('auth-required', 'Prihlás sa na odoslanie zmien do Google Sheets.');
+    if (!canSynchronize(accountId)) throw new SheetbaseError('auth-required', t('error.authRequired'));
     try { return { accountId, accessToken: getValidAccessToken() }; }
-    catch { throw new SheetbaseError('auth-required', 'Platnosť prihlásenia vypršala. Prihlás sa znova.'); }
+    catch { throw new SheetbaseError('auth-required', t('error.authExpired')); }
   } });
   client = createSheetbase({ accountId, storage: trackerStorage(), remote, namespace: 'fero-tracker' });
   if (!canSynchronize(accountId)) client.pause();

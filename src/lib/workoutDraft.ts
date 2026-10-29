@@ -1,3 +1,4 @@
+import { t } from '../i18n/messages';
 import { validateWorkoutSets, type WorkoutSet } from './workouts';
 
 export interface DraftSet { id: number; reps: string; weight: string }
@@ -23,8 +24,8 @@ export function removeWorkoutDraftRow(draft: WorkoutDraft, id: number): WorkoutD
 
 export function parseWorkoutDraft(rows: DraftSet[], allowEmpty: boolean): WorkoutSet[] {
   const filled = rows.filter((row) => !isEmptySet(row));
-  if (!filled.length && !allowEmpty) throw new Error('Pridaj aspoň jednu sériu.');
-  if (filled.some((row) => !row.reps.trim() || !row.weight.trim())) throw new Error('Vyplň opakovania aj váhu v každej začatej sérii.');
+  if (!filled.length && !allowEmpty) throw new Error(t('error.addSet'));
+  if (filled.some((row) => !row.reps.trim() || !row.weight.trim())) throw new Error(t('error.partialSet'));
   const sets = filled.map((row) => ({ reps: Number(row.reps), weight: Number(row.weight) }));
   validateWorkoutSets(sets);
   return sets;

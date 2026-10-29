@@ -15,27 +15,28 @@ export function deferred() {
 
 // Exercise the actual TypeScript modules, using only the existing TypeScript
 // dependency and Node's test runner. Each loader has its own module state.
-export function createLoader({ globals = {}, mocks = {}, env = { VITE_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com' } } = {}) {
+export function createLoader({ globals = {}, mocks = {}, locale = 'sk', env = { VITE_GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com' } } = {}) {
   const cache = new Map();
   const context = vm.createContext({
     console, Error, TypeError, setTimeout, clearTimeout, setInterval, clearInterval,
     TextEncoder, TextDecoder, atob, btoa, URL, URLSearchParams, AbortController,
-    crypto: globalThis.crypto, structuredClone, Event, ...globals,
+    crypto: globalThis.crypto, structuredClone, Event, navigator: { languages: [locale ?? 'sk'] }, ...globals,
   });
   function load(relative) {
     const file = path.resolve(root, relative);
     if (cache.has(file)) return cache.get(file).exports;
     const module = { exports: {} };
     cache.set(file, module);
+    if (file.endsWith('.json')) { module.exports = JSON.parse(fs.readFileSync(file, 'utf8')); return module.exports; }
     const text = fs.readFileSync(file, 'utf8').replaceAll('import.meta.env', `(${JSON.stringify(env)})`);
-    const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+    const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const require = (name) => {
       if (name === '@fokot/sheetbase' && !mocks[name]) return sheetbase;
       if (mocks[name]) return mocks[name];
       if (!name.startsWith('.')) return nativeRequire(name);
       const resolved = path.resolve(path.dirname(file), name);
       const relativeFile = path.relative(root, resolved);
-      return load(fs.existsSync(resolved) ? relativeFile : `${relativeFile}.ts`);
+      return load(fs.existsSync(resolved) ? relativeFile : fs.existsSync(`${resolved}.tsx`) ? `${relativeFile}.tsx` : `${relativeFile}.ts`);
     };
     vm.runInContext(`(function(require,module,exports){${code}\n})`, context, { filename: file })(require, module, module.exports);
     return module.exports;

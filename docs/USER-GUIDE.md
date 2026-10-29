@@ -1,6 +1,6 @@
 # Fero Tracker user guide
 
-Fero Tracker records daily habits and exercise sets. The interface is in Slovak; this guide is in English. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
+Fero Tracker records daily habits and exercise sets. The interface supports Slovak and English; this Markdown guide is in English. Use SK/EN on login, in the app header, or in Settings to switch. The website shares the same remembered language preference. Open the [documentation website](https://fokot.github.io/fero-tracker/docs/) for a visual introduction and an in-memory sample preview.
 
 ## First use
 
@@ -39,7 +39,7 @@ Open the gear icon for **Nastavenia**.
 - Create or select separate spreadsheets for Habits and Workouts. Changing a connection does not copy or delete the previous file. Pending edits stay attached to their original file.
 - Open the connected file directly in Google Sheets.
 - Inspect outstanding local changes and download a JSON backup in the local storage section. This backup is an export; there is currently no automatic import/restore flow.
-- Find installation instructions and a link to the English documentation.
+- Find installation instructions and a link to the bilingual documentation.
 
 An existing file must already be accessible to the app, or you must explicitly grant it with the optional Google Picker. Pasting a URL alone does not grant access. The app checks managed headers before connecting and preserves unrelated tabs.
 
