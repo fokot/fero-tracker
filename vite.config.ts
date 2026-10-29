@@ -10,6 +10,9 @@ export default defineConfig({
     strictPort: true
   },
   build: {
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      input: { app: 'index.html', docs: 'docs/index.html' }
+    }
   }
 })

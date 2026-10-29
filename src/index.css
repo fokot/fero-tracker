@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+.install-section { margin: 20px 12px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); text-align: left; }
+.install-section h2 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+.install-section p, .install-section summary { font-size: 14px; line-height: 1.6; }
+.install-section p { color: var(--muted); margin: 8px 0 14px; }
+.install-section summary { cursor: pointer; padding: 12px 0; color: var(--ink); }
+.install-section a { display: inline-block; margin-top: 8px; font-size: 13px; }
+.login-panel .install-section { margin: 28px 0 0; }
+
 :root {
   color-scheme: light;
   --canvas: #f5f8fc;

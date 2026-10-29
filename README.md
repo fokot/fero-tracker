@@ -1,6 +1,29 @@
-# Fero's Habit Tracker
+# Fero Tracker
 
-React, TypeScript and Zustand habit tracker backed by the signed-in user's Google Sheet.
+An installable habit and workout tracker built with React, TypeScript and Zustand, backed by your own Google Sheets. Edits save locally first and synchronize through [Sheetbase](https://github.com/fokot/sheetbase).
+
+The app interface is in Slovak. The English presentation and documentation website is built alongside the app at `docs/`, with an interactive sample preview, mobile installation steps, and setup instructions.
+
+- [User guide](docs/USER-GUIDE.md): habits, workouts, installation and offline use.
+- [Deployment guide](docs/DEPLOYMENT.md): GitHub Pages, Google configuration, subpaths and PWA updates.
+- [Architecture](docs/ARCHITECTURE.md): storage, synchronization, service worker and testing.
+
+## Install and deploy
+
+Open the production app in Chrome on Android and use **Nainštalovať aplikáciu** when offered, or choose **Install app** from the browser menu. On iPhone, open it in Safari → **Share → Add to Home Screen**. Sign in and load both trackers online before relying on offline use. Installed apps can have separate browser storage, so complete this first load inside the installed app too.
+
+GitHub Pages can host the app at `https://fokot.github.io/fero-tracker/` and the English website at `https://fokot.github.io/fero-tracker/docs/`. Enable **Settings → Pages → GitHub Actions**, add the Actions repository variable `VITE_GOOGLE_CLIENT_ID`, and authorize `https://fokot.github.io` (without a path) in the Google OAuth client. Push to `main` or manually run **Deploy app and documentation**. The workflow determines the Pages path automatically. See the [complete deployment steps](docs/DEPLOYMENT.md).
+
+To verify a project-path deployment locally:
+
+```sh
+npm run build -- --base=/fero-tracker/
+npm run preview -- --base=/fero-tracker/
+# App:  http://localhost:4173/fero-tracker/
+# Docs: http://localhost:4173/fero-tracker/docs/
+```
+
+For preview sign-in, also authorize `http://localhost:4173` in Google Cloud. Use `--base=/` for a root/custom-domain deployment, or another absolute path ending in `/`. Production requires HTTPS. Local development remains at `http://localhost:5173/` with documentation at `/docs/`.
 
 ## Local setup
 
@@ -80,7 +103,9 @@ Exercise names use the same hold/click gesture. Renaming changes the shared exer
 - `npm test`: regression tests for auth, file discovery, session persistence, tracker state and integration with the actual Sheetbase client/Google adapter. Sheetbase separately tests its own storage, batching and receipt contracts.
 - `npm run build`: TypeScript checks and production build.
 - `npm run preview`: preview the production build.
+- `npm run test:pwa`: check built app/docs, install assets and worker paths at `/`, `/fero-tracker/` and `/tools/tracker/`.
+- `npm run icons`: regenerate the committed PNG icons from the checkmark identity without extra dependencies.
 
-The production build includes a service worker that precaches the app shell, manifest and icon for reopening offline after a completed online visit. Google API responses, access tokens and third-party content are not cached by the worker. Serve production over HTTPS (localhost also works); the Vite development server deliberately does not register it. Use `npm run build` followed by `npm run preview` to verify the offline shell locally.
+The production build includes a service worker that precaches app and documentation HTML, scripts, styles, manifest and icons for reopening offline after a completed online visit. Registration, manifest URLs and caches respect the deployment path. Google API responses, access tokens and third-party content are not cached by the worker. Serve production over HTTPS (localhost also works); the Vite development server deliberately does not register it. Updates wait for existing windows to close: save drafts, close all tracker tabs/windows, then reopen. Use `npm run build` followed by `npm run preview` to verify the offline shell locally.
 
 On iOS and other browsers, synchronization runs while the app is open or when it is opened again. It cannot guarantee uploads after the browser closes. Google token expiry may require another sign-in, without interrupting local editing. Clearing site data, private browsing cleanup or browser eviction can remove unsynchronized local data; use the backup button when needed.

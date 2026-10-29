@@ -10,6 +10,7 @@ import { readSheetChoices } from './lib/preferences';
 import { readLocalSession, saveLocalSession } from './lib/session';
 import { authorizeSynchronization, pauseSynchronization } from './lib/sheetbase';
 import { useSyncStore } from './store/useSyncStore';
+import { InstallApp } from './components/InstallApp';
 
 function App() {
   const user = useHabitStore((state) => state.user);
@@ -99,6 +100,7 @@ function App() {
     <GoogleButton onLogin={() => void handleLogin()} busy={connecting} />
     {connecting && <><p role="status" className="text-sm text-gray-600 mt-3">Pripájam Google a načítavam tracker…</p><button onClick={cancelLogin} className="mt-4 text-sm underline text-gray-600">Zrušiť</button></>}
     <p className="login-footnote">Záznamy sa ukladajú v tomto prehliadači a synchronizujú do tvojich Google tabuliek.</p>
+    <InstallApp />
   </main></div>;
 }
 export default App;

@@ -12,6 +12,7 @@ import { Icon } from './Icon';
 import { canSynchronize } from '../lib/sheetbase';
 import { useSyncStore } from '../store/useSyncStore';
 import { LocalStorageSettings } from './LocalStorageSettings';
+import { InstallApp } from './InstallApp';
 
 export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
   const user = useHabitStore((state) => state.user)!;
@@ -60,6 +61,7 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
   return <main id="main-content" className="settings-page">
     <div className="page-heading"><div><h1>Nastavenia</h1><p className="page-description">Tvoj vzhľad a tvoje tabuľky.</p></div></div>
     <Appearance />
+    <InstallApp />
     <LocalStorageSettings userId={user.id} />
     <section className="settings-section" aria-labelledby="sheets-title">
       <h2 id="sheets-title">Google Sheets</h2>
