@@ -3,6 +3,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
+import * as sheetbase from '@fokot/sheetbase';
 
 const root = path.resolve(import.meta.dirname, '..');
 const nativeRequire = createRequire(path.join(root, 'package.json'));
@@ -29,6 +30,7 @@ export function createLoader({ globals = {}, mocks = {}, env = { VITE_GOOGLE_CLI
     const text = fs.readFileSync(file, 'utf8').replaceAll('import.meta.env', `(${JSON.stringify(env)})`);
     const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const require = (name) => {
+      if (name === '@fokot/sheetbase' && !mocks[name]) return sheetbase;
       if (mocks[name]) return mocks[name];
       if (!name.startsWith('.')) return nativeRequire(name);
       const resolved = path.resolve(path.dirname(file), name);

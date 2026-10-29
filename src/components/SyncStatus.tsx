@@ -1,5 +1,5 @@
 import { useSyncStore } from '../store/useSyncStore';
-import { synchronizeRecord } from '../lib/localSync';
+import { synchronizeRecord } from '../lib/sheetbase';
 
 interface Props {
   localKey: string | null; pendingWrites: number; queuedWrites: number;

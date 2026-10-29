@@ -7,8 +7,8 @@ import { errorMessage } from './lib/types';
 import { useHabitStore } from './store/useHabitStore';
 import { useWorkoutStore } from './store/useWorkoutStore';
 import { readSheetChoices } from './lib/preferences';
-import { readLocalSession, saveLocalSession } from './lib/localDatabase';
-import { authorizeSynchronization, pauseSynchronization } from './lib/localSync';
+import { readLocalSession, saveLocalSession } from './lib/session';
+import { authorizeSynchronization, pauseSynchronization } from './lib/sheetbase';
 import { useSyncStore } from './store/useSyncStore';
 
 function App() {

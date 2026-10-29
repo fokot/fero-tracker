@@ -1,8 +1,8 @@
 import { create } from 'zustand';
+import type { Columns, Snapshot, Transaction } from '@fokot/sheetbase';
 import { errorMessage, type Habit, type HabitType, type HabitValues, type User } from '../lib/types';
-import { readLocal, subscribeLocal } from '../lib/localDatabase';
-import { enqueueLocal, ensureLocal, requestSync, synchronizeRecord } from '../lib/localSync';
-import { projectRecord, recordKey, type Change, type LocalRecord, type TrackerData } from '../lib/localModel';
+import { openTracker, trackerTable, synchronizeRecord, validName } from '../lib/sheetbase';
+import { isDateKey } from '../lib/dates';
 
 interface HabitStore {
   user: User | null; spreadsheetId: string | null; habits: Habit[]; habitValues: HabitValues;
@@ -20,58 +20,59 @@ interface HabitStore {
 const emptyState = () => ({ user: null, spreadsheetId: null, habits: [], habitValues: {}, isLoading: false, hasLoaded: false, pendingWrites: 0, error: null, localKey: null, queuedWrites: 0, syncError: null, syncedAt: null });
 let sessionVersion = 0;
 let unsubscribe: (() => void) | undefined;
-let publishedRevision = -1;
 
 export const useHabitStore = create<HabitStore>((set, get) => {
-  const publish = (record: LocalRecord, version: number) => {
-    if (version !== sessionVersion || record.key !== get().localKey || (record.revision ?? 0) < publishedRevision) return;
-    const data = projectRecord(record); if (data.kind !== 'habits') return;
-    publishedRevision = record.revision ?? 0;
-    set({ habits: data.habits, habitValues: data.values, hasLoaded: record.initialized, isLoading: false, queuedWrites: record.operations.length, syncError: record.syncError, syncedAt: record.syncedAt });
+  const publish = (snapshot: Snapshot<Columns>, version: number) => {
+    if (version !== sessionVersion) return;
+    const habits = snapshot.columns.map(column => ({ id: column.id, name: column.header, type: column.type as HabitType }));
+    const habitValues = Object.fromEntries(snapshot.rows.map(row => [row.key, Object.fromEntries(habits.map(habit => {
+      const value = row.values[habit.id]; return [habit.name, value == null ? '' : habit.type === 'boolean' ? value ? '✓' : '' : String(value)];
+    }))]));
+    set({ habits, habitValues, hasLoaded: snapshot.initialized, isLoading: false, queuedWrites: snapshot.pending, syncError: snapshot.error?.message ?? null, syncedAt: snapshot.syncedAt });
   };
   const hydrate = async (version: number) => {
     const { user, spreadsheetId } = get(); if (!user || !spreadsheetId) return;
-    try { const record = await ensureLocal(user.id, 'habits', spreadsheetId); publish(record, version); if (!record.initialized) requestSync(record.key, 0); }
-    catch (error) { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }
+    const table = await openTracker(user.id, 'habits', spreadsheetId); publish(table.snapshot(), version);
   };
-  const mutate = async (make: (data: TrackerData) => Change): Promise<boolean> => {
-    const key = get().localKey, version = sessionVersion;
-    if (!key || !get().hasLoaded) return false;
-    set((state) => ({ pendingWrites: state.pendingWrites + 1, error: null }));
-    try { const record = await enqueueLocal(key, make); publish(record, version); return version === sessionVersion; }
+  const mutate = async (change: (transaction: Transaction<Columns>) => void): Promise<boolean> => {
+    const { user, spreadsheetId, hasLoaded } = get(), version = sessionVersion;
+    if (!user || !spreadsheetId || !hasLoaded) return false;
+    set(state => ({ pendingWrites: state.pendingWrites + 1, error: null }));
+    try { await trackerTable(user.id, 'habits', spreadsheetId).transaction(change); return version === sessionVersion; }
     catch (error) { if (version === sessionVersion) set({ error: errorMessage(error) }); return false; }
-    finally { if (version === sessionVersion) set((state) => ({ pendingWrites: Math.max(0, state.pendingWrites - 1) })); }
+    finally { if (version === sessionVersion) set(state => ({ pendingWrites: Math.max(0, state.pendingWrites - 1) })); }
   };
   return {
     ...emptyState(),
     setSession: (user, spreadsheetId) => {
-      const version = ++sessionVersion; unsubscribe?.(); publishedRevision = -1;
-      const key = spreadsheetId ? recordKey(user.id, 'habits', spreadsheetId) : null;
-      set({ ...emptyState(), user, spreadsheetId, localKey: key, isLoading: !!key });
-      unsubscribe = subscribeLocal((changed) => { if (changed === key) void readLocal(changed).then((record) => { if (record) publish(record, version); }).catch((error) => { if (version === sessionVersion) set({ error: errorMessage(error) }); }); });
-      void hydrate(version);
+      const version = ++sessionVersion; unsubscribe?.();
+      const table = spreadsheetId ? trackerTable(user.id, 'habits', spreadsheetId) : null;
+      set({ ...emptyState(), user, spreadsheetId, localKey: table?.key ?? null, isLoading: !!table });
+      unsubscribe = table?.subscribe(snapshot => publish(snapshot, version));
+      void hydrate(version).catch(error => { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); });
     },
-    clearUser: () => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; publishedRevision = -1; set(emptyState()); },
-    loadHabitsAndValues: async (_start, _end, refresh = false) => { const version = sessionVersion; await hydrate(version); if (refresh && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true); },
-    addHabit: (name, type) => {
-      const habit: Habit = { id: crypto.randomUUID(), name: name.trim(), type };
-      return mutate(() => ({ type: 'habit-add', habit }));
+    clearUser: () => { sessionVersion++; unsubscribe?.(); unsubscribe = undefined; set(emptyState()); },
+    loadHabitsAndValues: async (_start, _end, refresh = false) => {
+      const version = sessionVersion;
+      try { await hydrate(version); if (refresh && version === sessionVersion && get().localKey) await synchronizeRecord(get().localKey!, true); }
+      catch (error) { if (version === sessionVersion) set({ error: errorMessage(error), isLoading: false }); }
     },
-    renameHabit: (habitId, name) => mutate(() => ({ type: 'habit-rename', habitId, name })),
-    deleteHabit: (habitId) => mutate(() => ({ type: 'habit-delete', habitId })),
-    toggleHabit: (name, date) => {
-      const habitId = get().habits.find((habit) => habit.name === name && habit.type === 'boolean')?.id;
-      if (!habitId) return Promise.resolve(false);
-      return mutate((data) => {
-        if (data.kind !== 'habits') throw new Error('Neplatná tabuľka.');
-        const habit = data.habits.find((habit) => habit.id === habitId);
-        if (!habit) throw new Error('Návyk už neexistuje.');
-        return { type: 'habit-value', habitId, date, value: data.values[date]?.[habit.name] === '✓' ? '' : '✓' };
-      });
-    },
-    setNumericValue: (name, date, value) => {
-      const habitId = get().habits.find((habit) => habit.name === name && habit.type === 'numeric')?.id;
-      return habitId ? mutate(() => ({ type: 'habit-value', habitId, date, value })) : Promise.resolve(false);
-    },
+    addHabit: (name, type) => mutate(transaction => transaction.addColumn({ id: crypto.randomUUID(), header: validName(name), type })),
+    renameHabit: (id, name) => mutate(transaction => transaction.renameColumn(id, validName(name))),
+    deleteHabit: id => mutate(transaction => transaction.removeColumn(id)),
+    toggleHabit: (name, date) => mutate(transaction => {
+      if (!isDateKey(date)) throw new Error('Vyber platný dátum.');
+      const habit = transaction.columns.find(column => column.header === name && column.type === 'boolean');
+      if (!habit) throw new Error('Návyk už neexistuje.');
+      transaction.set(date, { [habit.id]: transaction.get(date)?.values[habit.id] === true ? null : true });
+    }),
+    setNumericValue: (name, date, input) => mutate(transaction => {
+      if (!isDateKey(date)) throw new Error('Vyber platný dátum.');
+      const habit = transaction.columns.find(column => column.header === name && column.type === 'numeric');
+      if (!habit) throw new Error('Návyk už neexistuje.');
+      const text = input.trim();
+      if (text && !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) throw new Error('Zadaj platné číslo alebo nechaj pole prázdne.');
+      transaction.set(date, { [habit.id]: text ? Number(text) : null });
+    }),
   };
 });

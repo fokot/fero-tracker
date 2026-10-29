@@ -9,7 +9,7 @@ import { useHabitStore } from '../store/useHabitStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { Appearance } from './Appearance';
 import { Icon } from './Icon';
-import { canSynchronize } from '../lib/localSync';
+import { canSynchronize } from '../lib/sheetbase';
 import { useSyncStore } from '../store/useSyncStore';
 import { LocalStorageSettings } from './LocalStorageSettings';
 
