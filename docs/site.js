@@ -10,6 +10,21 @@ function translatePage() {
 }
 document.querySelectorAll('[data-locale]').forEach(button => button.addEventListener('click', () => setLocale(button.dataset.locale)));
 translatePage();
+let screenshotView = 'habits';
+function renderScreenshot() {
+  const source = `${import.meta.env.BASE_URL}screenshots/${screenshotView}-${getLocale()}.jpg`;
+  const screenshot = document.querySelector('#app-screenshot');
+  screenshot.src = source;
+  screenshot.alt = t(screenshotView === 'habits' ? 'overview.screenshotHabitsAlt' : 'overview.screenshotWorkoutsAlt');
+  document.querySelector('#app-screenshot-link').href = source;
+  document.querySelector('#screenshot-full-size').href = source;
+  document.querySelectorAll('[data-shot]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.shot === screenshotView)));
+}
+document.querySelectorAll('[data-shot]').forEach(button => button.addEventListener('click', () => {
+  screenshotView = button.dataset.shot;
+  renderScreenshot();
+}));
+renderScreenshot();
 const sidebar = document.querySelector('#sidebar');
 const menu = document.querySelector('.menu-button');
 const closeMenu = () => { sidebar.classList.remove('open'); menu.setAttribute('aria-expanded', 'false'); };
@@ -70,5 +85,5 @@ document.querySelector('#sync-demo').addEventListener('click', () => {
   if (offline.checked) { updateStatus('demo.syncBlocked'); return; }
   updateStatus(pending ? 'demo.synced' : 'demo.empty', { count: pending }); pending = 0;
 });
-subscribeLocale(() => { translatePage(); render(); if (changed) showPending(); else updateStatus(statusKey, statusValues); });
+subscribeLocale(() => { translatePage(); renderScreenshot(); render(); if (changed) showPending(); else updateStatus(statusKey, statusValues); });
 render();
