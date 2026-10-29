@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { StoredTable } from '@fokot/sheetbase';
 import { trackerStorage, wakeSynchronization } from '../lib/sheetbase';
-import { listLegacyRecords } from '../lib/legacyDatabase';
 import { errorMessage } from '../lib/types';
 import { useSyncStore } from '../store/useSyncStore';
 
 export function LocalStorageSettings({ userId }: { userId: string }) {
   const [records, setRecords] = useState<StoredTable[]>([]);
-  const [legacyOnly, setLegacyOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { online, authorizedUserId } = useSyncStore();
   useEffect(() => {
     let current = true;
-    const update = () => { void Promise.all([trackerStorage().list(), listLegacyRecords()]).then(([all, legacy]) => { if (current) { const own = all.filter(record => record.target.accountId === userId); setRecords(own); setLegacyOnly(legacy.some(record => record.userId === userId && !own.some(table => table.initialized && table.target.spreadsheetId === record.sheetId))); } }).catch((reason) => { if (current) setError(errorMessage(reason)); }); };
+    const update = () => { void trackerStorage().list().then(all => {
+      if (current) setRecords(all.filter(record => record.target.accountId === userId));
+    }).catch(reason => { if (current) setError(errorMessage(reason)); }); };
     const unsubscribe = trackerStorage().subscribe(update); update();
     return () => { current = false; unsubscribe(); };
   }, [userId]);
@@ -20,8 +20,7 @@ export function LocalStorageSettings({ userId }: { userId: string }) {
   const download = async () => {
     try {
       const all = (await trackerStorage().list()).filter((record) => record.target.accountId === userId);
-      const legacy = (await listLegacyRecords()).filter(record => record.userId === userId);
-      const backup = { version: 2, savedAt: new Date().toISOString(), records: all, legacy };
+      const backup = { version: 2, savedAt: new Date().toISOString(), records: all };
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `fero-tracker-${new Date().toISOString().slice(0, 10)}.json`;
       link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -37,7 +36,7 @@ export function LocalStorageSettings({ userId }: { userId: string }) {
     </div>)}
     <div className="sheet-setting-actions">
       {!!pending.length && <button className="secondary-button" disabled={!online || authorizedUserId !== userId} onClick={() => void wakeSynchronization()}>Synchronizovať</button>}
-      <button className="text-button" disabled={!records.length && !legacyOnly} onClick={() => void download()}>Stiahnuť lokálnu zálohu</button>
+      <button className="text-button" disabled={!records.length} onClick={() => void download()}>Stiahnuť lokálnu zálohu</button>
     </div>
     <p className="field-help">Záloha obsahuje aj neodoslané zmeny. Vymazanie dát webu v prehliadači odstráni jeho lokálne záznamy.</p>
     {error && <p role="alert" className="form-error">{error}</p>}

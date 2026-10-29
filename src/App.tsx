@@ -7,7 +7,7 @@ import { errorMessage } from './lib/types';
 import { useHabitStore } from './store/useHabitStore';
 import { useWorkoutStore } from './store/useWorkoutStore';
 import { readSheetChoices } from './lib/preferences';
-import { readLocalSession, saveLocalSession } from './lib/legacyDatabase';
+import { readLocalSession, saveLocalSession } from './lib/session';
 import { authorizeSynchronization, pauseSynchronization } from './lib/sheetbase';
 import { useSyncStore } from './store/useSyncStore';
 

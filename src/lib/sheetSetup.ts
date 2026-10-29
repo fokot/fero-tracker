@@ -1,18 +1,17 @@
-import { createGoogleSheetsRemote, createMemoryStorage, createSheetbase, type Target } from '@fokot/sheetbase';
+import { createGoogleSheetsRemote, createMemoryStorage, createSheetbase } from '@fokot/sheetbase';
 import { getAuthVersion, getValidAccessToken, SessionExpiredError } from './googleOAuth';
+import type { TrackerKind } from './preferences';
+import { trackerDefinition } from './trackerSchema';
 
-// Short-lived validation during discovery/settings. OAuth and file selection
-// belong to the application; table validation belongs to Sheetbase.
-export function createSetupClient() {
+// Settings validate a file without changing the active connection or cache.
+export async function prepareTrackerSheet(kind: TrackerKind, spreadsheetId: string): Promise<void> {
   const version = getAuthVersion(), accountId = `setup:${version}`;
-  const guard = () => { if (version !== getAuthVersion()) throw new SessionExpiredError(); };
   const storage = createMemoryStorage();
-  const remote = createGoogleSheetsRemote({ getCredentials: () => { guard(); return { accountId, accessToken: getValidAccessToken() }; } });
+  const remote = createGoogleSheetsRemote({ getCredentials: () => {
+    if (version !== getAuthVersion()) throw new SessionExpiredError();
+    return { accountId, accessToken: getValidAccessToken() };
+  } });
   const db = createSheetbase({ accountId, storage, remote, autoSync: false });
-  return { db, remote, accountId, guard, dispose: () => { db.dispose(); storage.close(); } };
-}
-export async function initializeTrackerTab(spreadsheetId: string, sheet: string) {
-  const setup = createSetupClient();
-  const target: Target = { accountId: setup.accountId, spreadsheetId, sheet, keyColumn: 'Date', headers: [], fingerprint: 'setup' };
-  try { await setup.remote.initialize(target, setup.guard); } finally { setup.dispose(); }
+  try { await db.table(trackerDefinition(kind, spreadsheetId)).open({ create: true }); }
+  finally { db.dispose(); storage.close(); }
 }

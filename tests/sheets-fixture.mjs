@@ -2,15 +2,13 @@ import assert from 'node:assert/strict';
 import { createLoader, plain } from './load-module.mjs';
 import * as sdk from '@fokot/sheetbase';
 
-const marker = { metadataKey: 'feros-tracker-layout', metadataValue: 'date-rows-v1' };
-export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], legacy = false, existing = 'sheet-1', failDrive = false, failBatch = false, loseBatchResponse = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
+export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','Name','Type'], ['run','Run','boolean'], ['read','Read','numeric']], existing = 'sheet-1', failDrive = false, failBatch = false, loseBatchResponse = false, columns = 26, rowCount = 1000, extraTabs = [], sheetName = 'Habits', apiModule = 'src/lib/googleSheets.ts' } = {}) {
   const calls = [];
   let gridCellsRead = 0;
   let version = 0;
   let responseLost = false;
   const tab = (sheetId, title, rows, columnCount = 26) => ({ properties: { sheetId, title, gridProperties: { columnCount, rowCount } }, rows: plain(rows) });
   let tabs = [tab(0,sheetName,rows,columns), ...extraTabs];
-  if (!legacy) tabs[0].developerMetadata = [marker];
   if (definitions !== null) tabs.push(tab(1,'HabitDefinitions',definitions,3));
   const get = (state, id) => { const sheet=state.find((sheet)=>sheet.properties.sheetId===id); assert.ok(sheet,`Missing sheet ${id}`); return sheet; };
   function put(sheet, row, col, values) {
@@ -23,11 +21,7 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
   }
   const unpack = (rows) => rows.map((row)=>(row.values??[]).map((cell)=>cell.userEnteredValue?.stringValue??''));
   function apply(state, request) {
-    if(request.duplicateSheet) {
-      const {sourceSheetId,newSheetId,newSheetName}=request.duplicateSheet;
-      assert.ok(!state.some((sheet)=>sheet.properties.sheetId===newSheetId || sheet.properties.title===newSheetName));
-      const copy=plain(get(state,sourceSheetId)); copy.properties.sheetId=newSheetId;copy.properties.title=newSheetName; state.push(copy);
-    } else if(request.addSheet) {
+    if(request.addSheet) {
       const props=request.addSheet.properties;
       assert.ok(!state.some((sheet)=>sheet.properties.sheetId===props.sheetId || sheet.properties.title===props.title));
       state.push(tab(props.sheetId,props.title,[],props.gridProperties?.columnCount??26));
@@ -53,13 +47,6 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
         target.rows.splice(startIndex,count);
         target.properties.gridProperties.rowCount-=count;
       }
-    } else if(request.updateSheetProperties) {
-      const props=request.updateSheetProperties.properties;
-      Object.assign(get(state,props.sheetId).properties.gridProperties,props.gridProperties);
-    } else if(request.createDeveloperMetadata) {
-      const metadata=request.createDeveloperMetadata.developerMetadata;
-      const target=get(state,metadata.location.sheetId);
-      (target.developerMetadata??=[]).push(metadata);
     } else if(request.appendCells) {
       const {sheetId,rows}=request.appendCells;
       const target=get(state,sheetId), values=unpack(rows);
@@ -76,17 +63,7 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
     }
     if(path==='/v4/spreadsheets' && options.method==='POST') {
       tabs=body.sheets.map((sheet)=>({properties:{sheetId:sheet.properties.sheetId,title:sheet.properties.title,gridProperties:{rowCount:1000,columnCount:26,...sheet.properties.gridProperties}},rows:unpack(sheet.data[0].rowData)}));
-      for(const metadata of body.developerMetadata??[]) (get(tabs,metadata.location.sheetId).developerMetadata??=[]).push(metadata);
       return {spreadsheetId:'new-sheet'};
-    }
-    if(path.endsWith('/values:batchUpdate')) {
-      const copy=plain(tabs);
-      for(const entry of body.data) {
-        const match=entry.range.match(/^Habits!([A-Z]+)(\d+)$/); assert.ok(match);
-        const col=[...match[1]].reduce((n,char)=>n*26+char.charCodeAt(0)-64,0)-1;
-        put(get(copy,0),Number(match[2])-1,col,entry.values);
-      }
-      tabs=copy;return {};
     }
     if(path.endsWith(':batchUpdate')) {
       if(failBatch) throw new Error('Simulated batch failure');
@@ -95,11 +72,6 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       tabs=copy;
       if(loseBatchResponse && !responseLost) { responseLost=true; throw new Error('Response lost after commit'); }
       return {};
-    }
-    if(path.includes('/values/')) {
-      const name=path.split('/values/')[1].split('!')[0].replaceAll("'",'');
-      const target=tabs.find((sheet)=>sheet.properties.title===name);assert.ok(target,`Missing range ${name}`);
-      return {values:plain(target.rows)};
     }
     if(parsed.searchParams.get('fields')?.includes('data(')) {
       const ranges=parsed.searchParams.getAll('ranges');

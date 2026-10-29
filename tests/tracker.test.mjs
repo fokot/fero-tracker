@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { plain, deferred } from './load-module.mjs';
-import { setupTracker, user, date, tick, habitData, workoutData } from './tracker-fixture.mjs';
+import { setupTracker, user, date, tick } from './tracker-fixture.mjs';
 const range = [new Date(2026,9,1), new Date(2026,9,31)];
 async function habits(t, options) {
   const env = setupTracker(t, options), table = await env.seed();
@@ -87,18 +87,6 @@ test('late exercise discovery cannot repopulate a signed-out session', async t =
   const first = env.workouts.getState().loadDay(date), second = env.workouts.getState().loadDay('2026-10-26'); assert.equal(calls, 1);
   env.workouts.getState().clearUser(); gate.resolve('new'); await Promise.all([first, second]); assert.equal(env.workouts.getState().spreadsheetId, null);
 });
-test('legacy durable outboxes import once with their exact frozen batch identity', async t => {
-  const legacy = [{ userId: user.id, sheetId:'sheet-1', kind:'habits', base:habitData, initialized:true, syncedAt:1,
-    operations:[{id:'old',change:{type:'habit-value',habitId:'run',date,value:'✓'}}],batch:{id:'frozen',operationIds:['old']} }];
-  const env = setupTracker(t, { legacy }); const table = await env.sync.openTracker(user.id,'habits','sheet-1'); assert.equal(table.get(date).values.run, true);
-  assert.equal((await table.export()).batch.id, 'frozen'); await table.set(date,{run:null});
-  await env.sync.openTracker(user.id,'habits','sheet-1'); assert.equal(table.get(date).values.run,null); assert.equal(table.pending(),2);
-});
-test('legacy workout add plus value remains inside the original frozen batch', async t => {
-  const env = setupTracker(t), converted = env.load('src/lib/legacyMigration.ts').convertLegacy({ userId:user.id,sheetId:'w',kind:'workouts',base:workoutData,initialized:true,syncedAt:1,
-    operations:[{id:'old',change:{type:'workout-sets',date,name:'New',sets:[{reps:1,weight:0}]}}],batch:{id:'frozen',operationIds:['old']} });
-  assert.equal(converted.operations.length,2); assert.deepEqual(plain(converted.batch.operationIds),['old:column','old']);
-});
 test('expired Google credentials expose reauthorization and a new login can recover the original queue', async t => {
   const env=await habits(t),remote=env.table.client.options.remote,commit=remote.commit;
   const {SheetbaseError}=await import('@fokot/sheetbase');let expired=true;
@@ -108,4 +96,13 @@ test('expired Google credentials expose reauthorization and a new login can reco
   const status=env.load('src/store/useSyncStore.ts').useSyncStore;assert.equal(status.getState().authorizedUserId,null);
   expired=false;env.sync.authorizeSynchronization(user.id,[]);await tick();await env.sync.synchronizeRecord(env.table.key);
   assert.equal(status.getState().authorizedUserId,user.id);assert.equal(env.table.pending(),0);assert.equal(env.store.getState().habitValues[date].Run,'✓');
+});
+
+test('a fresh connection starts empty and saves new habits through Sheetbase',async t=>{
+  const env=setupTracker(t);env.sync.authorizeSynchronization(user.id,[]);
+  env.habits.getState().setSession(user,'new-sheet');await env.habits.getState().loadHabitsAndValues(...range);
+  assert.equal(env.habits.getState().hasLoaded,true);assert.deepEqual(plain(env.habits.getState().habits),[]);
+  assert.equal(await env.habits.getState().addHabit('Run','boolean'),true);assert.equal(await env.habits.getState().toggleHabit('Run',date),true);
+  await env.sync.synchronizeRecord(env.habits.getState().localKey);assert.equal(env.habits.getState().queuedWrites,0);
+  assert.equal(env.habits.getState().habitValues[date].Run,'✓');
 });

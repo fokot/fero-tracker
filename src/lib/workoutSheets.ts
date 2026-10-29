@@ -1,18 +1,9 @@
-import { column, type Columns } from '@fokot/sheetbase';
 import { googleRequest } from './googleApi';
-import { createSetupClient } from './sheetSetup';
+import { prepareTrackerSheet } from './sheetSetup';
 import { SHEETS, post, rowData, serialize, trackerSheetName, type Spreadsheet } from './googleSheetsClient';
-import { formatWorkoutSets, parseWorkoutSets } from './workouts';
 
 export function connectWorkoutSheet(id: string): Promise<void> {
-  return serialize(id, async () => {
-    const setup = createSetupClient();
-    try {
-      const table = setup.db.table<Columns>({ spreadsheetId: id, sheet: 'Workouts', keyColumn: 'Date', duplicateKeys: 'last', columns: {},
-        dynamic: { sheet: 'WorkoutDefinitions', defaultType: 'sets', codecs: { sets: header => column.custom(header, { id: 'workout-sets:v1', encode: formatWorkoutSets, decode: parseWorkoutSets }) } } });
-      await table.open({ create: true });
-    } finally { setup.dispose(); }
-  });
+  return serialize(id, () => prepareTrackerSheet('workouts', id));
 }
 
 export async function getOrCreateWorkoutSheet(email: string): Promise<string> {
