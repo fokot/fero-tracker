@@ -14,6 +14,7 @@ interface HabitStore {
   loadHabitsAndValues: (start: Date, end: Date, refresh?: boolean) => Promise<void>;
   addHabit: (name: string, type: HabitType) => Promise<boolean>;
   renameHabit: (habitId: string, name: string) => Promise<boolean>;
+  reorderHabits: (ids: string[]) => Promise<boolean>;
   deleteHabit: (habitId: string) => Promise<boolean>;
   toggleHabit: (name: string, date: string) => Promise<boolean>;
   setNumericValue: (name: string, date: string, value: string) => Promise<boolean>;
@@ -60,6 +61,14 @@ export const useHabitStore = create<HabitStore>((set, get) => {
     },
     addHabit: (name, type) => mutate(transaction => transaction.addColumn({ id: crypto.randomUUID(), header: validName(name), type })),
     renameHabit: (id, name) => mutate(transaction => transaction.renameColumn(id, validName(name))),
+    reorderHabits: ids => {
+      const captured = [...ids];
+      return mutate(transaction => {
+        const current = transaction.columns;
+        if (new Set(captured).size !== captured.length || captured.length !== current.length || captured.some(id => !current.some(column => column.id === id))) throw new Error(t('habits.orderChanged'));
+        captured.forEach((id, index) => transaction.moveColumn(id, index));
+      });
+    },
     deleteHabit: id => mutate(transaction => transaction.removeColumn(id)),
     toggleHabit: (name, date) => mutate(transaction => {
       if (!isDateKey(date)) throw new Error(t('error.date'));

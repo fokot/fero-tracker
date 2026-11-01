@@ -229,5 +229,13 @@
   "update.title": "A new version is ready.",
   "update.help": "Save your drafts and load it when you are ready.",
   "update.closeEditor": "Save or close the open form first.",
-  "update.reload": "Load new version"
+  "update.reload": "Load new version",
+  "habits.reorder": "Edit order",
+  "habits.orderHelp": "Drag a habit by its handle or use the arrow buttons. You can also use the arrow keys on a handle.",
+  "habits.orderMove": "Move {name}",
+  "habits.orderUp": "Move {name} up",
+  "habits.orderDown": "Move {name} down",
+  "habits.orderPosition": "{name}: position {position} of {count}.",
+  "habits.orderFailed": "Could not save the order. Try again.",
+  "habits.orderChanged": "The habit list has changed. Close and reopen the order editor."
 }

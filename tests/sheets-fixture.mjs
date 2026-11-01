@@ -36,6 +36,15 @@ export function setup({ rows = [['Date', 'Run', 'Read']], definitions = [['ID','
       const {sheetId,dimension,length}=request.appendDimension;
       const target=get(state,sheetId);
       target.properties.gridProperties[dimension==='COLUMNS'?'columnCount':'rowCount']+=length;
+    } else if(request.moveDimension) {
+      const { source, destinationIndex } = request.moveDimension;
+      assert.equal(source.dimension, 'COLUMNS');
+      const target = get(state, source.sheetId), count = source.endIndex - source.startIndex;
+      const to = destinationIndex > source.startIndex ? destinationIndex - count : destinationIndex;
+      for (const row of target.rows) {
+        while (row.length < Math.max(source.endIndex, destinationIndex)) row.push('');
+        const moved = row.splice(source.startIndex, count); row.splice(to, 0, ...moved);
+      }
     } else if(request.deleteDimension) {
       const {sheetId,dimension,startIndex,endIndex}=request.deleteDimension.range;
       const target=get(state,sheetId), count=endIndex-startIndex;

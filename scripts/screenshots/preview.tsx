@@ -33,7 +33,8 @@ const workouts = {
   [locale === 'sk' ? 'Drep' : 'Squat']: [{ reps: 8, weight: 60 }, { reps: 8, weight: 70 }, { reps: 6, weight: 75 }],
 };
 useHabitStore.setState({ user, spreadsheetId: 'sample-habits', habits, habitValues, hasLoaded: true, isLoading: false,
-  pendingWrites: 0, queuedWrites: 0, error: null, syncError: null, syncedAt: Date.now(), localKey: null,
+  pendingWrites: 0, queuedWrites: 0, error: null, syncError: null, syncedAt: Date.now(), localKey: 'sample-habits',
+  reorderHabits: async ids => { useHabitStore.setState(state => ({ habits: ids.map(id => state.habits.find(habit => habit.id === id)!) })); return true; },
   loadHabitsAndValues: async () => {},
 });
 useWorkoutStore.setState({ user, spreadsheetId: 'sample-workouts', workouts, exercises: Object.keys(workouts), loadedDate: selectedDate,

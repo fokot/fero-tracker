@@ -1,7 +1,11 @@
 import type { ReactNode } from 'react';
 
-type IconName = 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash' | 'settings' | 'sun' | 'moon' | 'system' | 'sheet';
+type IconName = 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash' | 'settings' | 'sun' | 'moon' | 'system' | 'sheet' | 'up' | 'down' | 'grip' | 'reorder';
 const paths: Record<IconName, ReactNode> = {
+  up: <path d="m6 14 6-6 6 6" />,
+  down: <path d="m6 10 6 6 6-6" />,
+  grip: <><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" strokeWidth="3" /></>,
+  reorder: <><path d="M8 4v16m-4-4 4 4 4-4M16 20V4m-4 4 4-4 4 4" /></>,
   habits: <><rect x="3.5" y="3.5" width="17" height="17" rx="4" /><path d="M3.5 9h17M9 9v11.5m5-6 2 2 4-4" /></>,
   workouts: <><path d="M7 6v12M4 9v6m13-9v12m3-9v6M7 12h10" /></>,
   plus: <path d="M12 5v14M5 12h14" />,

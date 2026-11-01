@@ -301,3 +301,12 @@ button, a, input { scroll-margin-bottom: 100px; }
 .pwa-update-notice span { color: var(--muted); }
 .pwa-update-notice button { flex-shrink: 0; }
 @media (max-width: 480px) { .pwa-update-notice { align-items: stretch; flex-direction: column; gap: 10px; } .pwa-update-notice button { align-self: flex-start; } }
+
+.habit-order-toolbar { display: flex; justify-content: flex-end; padding: 0 var(--gutter) 10px; }
+.habit-order-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; }
+.habit-order-list { list-style: none; padding: 0; margin: 16px 0 0; max-height: 50dvh; overflow-y: auto; overscroll-behavior: contain; }
+.habit-order-item { display: flex; align-items: center; gap: 4px; min-height: 60px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.habit-order-item.is-dragging { background: var(--accent-soft); border-radius: 12px; }
+.habit-order-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.habit-order-grip { touch-action: none; cursor: grab; }
+.habit-order-grip:active { cursor: grabbing; }

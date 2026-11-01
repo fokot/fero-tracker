@@ -8,11 +8,12 @@ import type { HabitType } from '../lib/types';
 import { Modal } from './Modal';
 import { Icon } from './Icon';
 import { EditableName } from './EditableName';
+import { HabitOrderModal } from './HabitOrderModal';
 import { ManageItemModal } from './ManageItemModal';
 
 export function HabitGrid() {
   const { habits, habitValues, toggleHabit, setNumericValue, spreadsheetId,
-    loadHabitsAndValues, addHabit, renameHabit, deleteHabit, isLoading, hasLoaded, pendingWrites, error, localKey, queuedWrites, syncError, syncedAt } = useHabitStore();
+    loadHabitsAndValues, reorderHabits, addHabit, renameHabit, deleteHabit, isLoading, hasLoaded, pendingWrites, error, localKey, queuedWrites, syncError, syncedAt } = useHabitStore();
   const [today, setToday] = useState(() => dateKey(new Date()));
   const dates = useMemo(() => {
     const [year, month, day] = today.split('-').map(Number);
@@ -21,6 +22,7 @@ export function HabitGrid() {
   const calendar = useRef<HTMLDivElement>(null);
   const initialScroll = useRef(false);
   const [adding, setAdding] = useState(false);
+  const [orderingKey, setOrderingKey] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<HabitType>('boolean');
   const [editing, setEditing] = useState<{ name: string; date: string } | null>(null);
@@ -60,7 +62,7 @@ export function HabitGrid() {
     if (habits.length && !initialScroll.current) { showToday(); initialScroll.current = true; }
   }, [habits.length, today]);
 
-  const close = () => { if (!useHabitStore.getState().pendingWrites) { setAdding(false); setEditing(null); setManagingId(null); setFormError(null); } };
+  const close = () => { if (!useHabitStore.getState().pendingWrites) { setAdding(false); setOrderingKey(null); setEditing(null); setManagingId(null); setFormError(null); } };
   const submitHabit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -85,6 +87,7 @@ export function HabitGrid() {
       <p><strong>{completed}<span>/{habits.length}</span></strong><span>  {t('habits.recorded')}</span></p>
       <SyncStatus {...{localKey, pendingWrites, queuedWrites, syncError, syncedAt}} ready={hasLoaded} />
     </div>
+    {habits.length > 1 && <div className="habit-order-toolbar"><button type="button" className="text-button habit-order-trigger" disabled={busy} onClick={() => setOrderingKey(localKey)}><Icon name="reorder" size={17} />{t('habits.reorder')}</button></div>}
     <div className="calendar-toolbar">
       <div className="calendar-period"><strong>{dates[30].toLocaleDateString(localeTag(), { month: 'long', year: 'numeric' })}</strong><button type="button" onClick={goToToday} className="today-button" title={t('common.goToday')}><Icon name="today" size={17} />{t('common.today')}</button></div>
       <div className="toolbar-actions">
@@ -121,6 +124,8 @@ export function HabitGrid() {
           </tr>)}</tbody>
         </table>
       </div>}
+    {orderingKey && orderingKey === localKey && <HabitOrderModal habits={habits} busy={busy} onClose={close}
+      onSave={async ids => { if (!await reorderHabits(ids)) throw new Error(useHabitStore.getState().error ?? t('habits.orderFailed')); }} />}
     {managingHabit && <ManageItemModal name={managingHabit.name} kind="habit" busy={syncing} onClose={close}
       renameHelp={t('habits.renameHelp')}
       deleteHelp={t('habits.deleteHelp')} deleteLabel={t('habits.delete')}

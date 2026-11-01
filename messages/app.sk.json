@@ -229,5 +229,13 @@
   "update.title": "Nová verzia je pripravená.",
   "update.help": "Ulož rozpracované úpravy a načítaj ju, keď sa ti to hodí.",
   "update.closeEditor": "Najprv ulož alebo zavri otvorený formulár.",
-  "update.reload": "Načítať novú verziu"
+  "update.reload": "Načítať novú verziu",
+  "habits.reorder": "Upraviť poradie",
+  "habits.orderHelp": "Potiahni návyk za úchyt alebo ho posuň šípkami. Na úchyte môžeš použiť aj šípky na klávesnici.",
+  "habits.orderMove": "Presunúť {name}",
+  "habits.orderUp": "Posunúť {name} vyššie",
+  "habits.orderDown": "Posunúť {name} nižšie",
+  "habits.orderPosition": "{name}: pozícia {position} z {count}.",
+  "habits.orderFailed": "Poradie sa nepodarilo uložiť. Skús to znova.",
+  "habits.orderChanged": "Zoznam návykov sa medzičasom zmenil. Zavri úpravu poradia a otvor ju znova."
 }
