@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { errorMessage } from '../lib/types';
 import type { WorkoutSet } from '../lib/workouts';
 import { createWorkoutDraft, isEmptySet, parseWorkoutDraft, removeWorkoutDraftRow, updateWorkoutDraft } from '../lib/workoutDraft';
+import { exerciseSuggestions } from '../lib/exerciseSuggestions';
 
 interface Props {
   date: string;
@@ -19,6 +20,15 @@ interface Props {
 export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave, onClose }: Props) {
   const suggestionId = useId();
   const [exercise, setExercise] = useState(name ?? '');
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const suggestions = exerciseSuggestions(exercises, exercise);
+  const showSuggestions = suggestionsOpen && !busy && suggestions.length > 0;
+  const selectExercise = (value: string) => {
+    setExercise(value);
+    setSuggestionsOpen(false);
+    setActiveSuggestion(-1);
+  };
   const [draft, setDraft] = useState(() => createWorkoutDraft(initialSets));
   const [error, setError] = useState<string | null>(null);
   const update = (id: number, field: 'reps' | 'weight', value: string) => setDraft((current) => updateWorkoutDraft(current, id, field, value));
@@ -38,9 +48,30 @@ export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave
       <p className="form-context">{date}</p>
       {!name && <>
         <label htmlFor={`${suggestionId}-name`} className="field-label">{t('workouts.name')}</label>
-        <input id={`${suggestionId}-name`} list={suggestionId} autoFocus required maxLength={100} value={exercise} disabled={busy}
-          onChange={(event) => setExercise(event.target.value)} placeholder={t('workouts.placeholder')} className="form-input" />
-        <datalist id={suggestionId}>{exercises.map((item) => <option key={item} value={item} />)}</datalist>
+        <div className="exercise-autocomplete">
+          <input id={`${suggestionId}-name`} role="combobox" aria-autocomplete="list" aria-expanded={showSuggestions}
+            aria-controls={showSuggestions ? suggestionId : undefined}
+            aria-activedescendant={showSuggestions && activeSuggestion >= 0 && activeSuggestion < suggestions.length ? `${suggestionId}-${activeSuggestion}` : undefined}
+            autoComplete="off" autoFocus required maxLength={100} value={exercise} disabled={busy}
+            onFocus={() => setSuggestionsOpen(true)} onBlur={() => { setSuggestionsOpen(false); setActiveSuggestion(-1); }}
+            onChange={(event) => { setExercise(event.target.value); setSuggestionsOpen(true); setActiveSuggestion(-1); }}
+            onKeyDown={(event) => {
+              if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && suggestions.length) {
+                event.preventDefault();
+                setSuggestionsOpen(true);
+                setActiveSuggestion(current => event.key === 'ArrowDown' ? (current + 1) % suggestions.length : (current <= 0 ? suggestions.length - 1 : current - 1));
+              } else if (event.key === 'Enter' && showSuggestions && activeSuggestion >= 0 && activeSuggestion < suggestions.length) {
+                event.preventDefault(); selectExercise(suggestions[activeSuggestion]);
+              } else if (event.key === 'Escape' && suggestionsOpen) {
+                event.preventDefault(); event.stopPropagation(); setSuggestionsOpen(false); setActiveSuggestion(-1);
+              }
+            }} placeholder={t('workouts.placeholder')} className="form-input" />
+          {showSuggestions && <ul id={suggestionId} role="listbox" aria-label={t('workouts.name')} className="exercise-suggestions">
+            {suggestions.map((item, index) => <li key={item} id={`${suggestionId}-${index}`} role="option" aria-selected={index === activeSuggestion}
+              className={index === activeSuggestion ? 'is-active' : ''} onPointerDown={event => event.preventDefault()}
+              onClick={() => selectExercise(item)}>{item}</li>)}
+          </ul>}
+        </div>
       </>}
       <div className="set-editor-labels" aria-hidden="true"><span>#</span><span>{t('common.reps')}</span><span>{t('common.weightKg')}</span><span /></div>
       <div className="set-editor-rows">
