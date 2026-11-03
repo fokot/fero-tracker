@@ -237,5 +237,12 @@
   "habits.orderDown": "Posunúť {name} nižšie",
   "habits.orderPosition": "{name}: pozícia {position} z {count}.",
   "habits.orderFailed": "Poradie sa nepodarilo uložiť. Skús to znova.",
-  "habits.orderChanged": "Zoznam návykov sa medzičasom zmenil. Zavri úpravu poradia a otvor ju znova."
+  "habits.orderChanged": "Zoznam návykov sa medzičasom zmenil. Zavri úpravu poradia a otvor ju znova.",
+  "workouts.historyTitle": "História cviku",
+  "workouts.historyHelp": "Pri pridávaní a úprave sérií zobrazí údaje z tréningov pred upravovaným dňom. Maximum je séria s najvyššou váhou, pri rovnakej váhe s najviac opakovaniami. Voľba sa zapamätá v tomto prehliadači.",
+  "workouts.historyShow": "Zobrazovať pod sériami",
+  "workouts.historyLast": "Posledný tréning",
+  "workouts.historyBest": "Maximum",
+  "workouts.historyNone": "Nezobrazovať",
+  "workouts.historySet": "{reps} × {weight} kg"
 }

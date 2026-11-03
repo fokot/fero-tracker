@@ -4,6 +4,7 @@ import { SyncStatus } from './SyncStatus';
 import { useEffect, useState } from 'react';
 import { dateKey, isDateKey } from '../lib/dates';
 import { useWorkoutStore } from '../store/useWorkoutStore';
+import { useWorkoutHistoryPreference } from '../store/useWorkoutHistoryPreference';
 import { WorkoutEditor } from './WorkoutEditor';
 import { Icon } from './Icon';
 import { EditableName } from './EditableName';
@@ -11,6 +12,8 @@ import { ManageItemModal } from './ManageItemModal';
 
 export function Workouts() {
   const { user, spreadsheetId, workouts, exercises, loadedDate, isLoading, pendingWrites, error, localKey, queuedWrites, syncError, syncedAt, loadDay, saveExercise, renameExercise } = useWorkoutStore();
+  const historyMode = useWorkoutHistoryPreference(state => state.mode);
+  const history = useWorkoutStore(state => state.history);
   const [date, setDate] = useState(() => loadedDate ?? dateKey(new Date()));
   const [editor, setEditor] = useState<{ name?: string } | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
@@ -58,7 +61,7 @@ export function Workouts() {
       deleteHelp={t('workouts.deleteHelp', { date })} deleteLabel={t('workouts.delete')}
       onRename={async (nextName) => { if (!await renameExercise(date, managing, nextName)) throw new Error(useWorkoutStore.getState().error ?? t('workouts.renameFailed')); }}
       onDelete={async () => { if (!await saveExercise(date, managing, [])) throw new Error(useWorkoutStore.getState().error ?? t('workouts.deleteFailed')); }} />}
-    {editor && <WorkoutEditor date={date} name={editor.name} initialSets={editor.name ? workouts[editor.name] ?? [] : []} exercises={exercises.filter((name) => !Object.prototype.hasOwnProperty.call(workouts, name))} busy={busy} onClose={close} onSave={(name, sets) => {
+    {editor && <WorkoutEditor history={history} historyMode={historyMode} date={date} name={editor.name} initialSets={editor.name ? workouts[editor.name] ?? [] : []} exercises={exercises.filter((name) => !Object.prototype.hasOwnProperty.call(workouts, name))} busy={busy} onClose={close} onSave={(name, sets) => {
       if (!editor.name && entries.some(([existing]) => existing.trim().toLowerCase() === name.trim().toLowerCase())) return Promise.reject(new Error(t('workouts.duplicateDay')));
       return saveExercise(date, name, sets);
     }} />}

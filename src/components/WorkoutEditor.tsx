@@ -6,8 +6,12 @@ import { errorMessage } from '../lib/types';
 import type { WorkoutSet } from '../lib/workouts';
 import { createWorkoutDraft, isEmptySet, parseWorkoutDraft, removeWorkoutDraftRow, updateWorkoutDraft } from '../lib/workoutDraft';
 import { exerciseSuggestions } from '../lib/exerciseSuggestions';
+import { workoutReference, type WorkoutHistory, type HistoryMode } from '../lib/workoutHistory';
+import { localeTag } from '../i18n/locale';
 
 interface Props {
+  history?: WorkoutHistory;
+  historyMode?: HistoryMode;
   date: string;
   name?: string;
   initialSets: WorkoutSet[];
@@ -17,9 +21,10 @@ interface Props {
   onClose: () => void;
 }
 
-export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave, onClose }: Props) {
+export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave, onClose, history = {}, historyMode = 'last' }: Props) {
   const suggestionId = useId();
   const [exercise, setExercise] = useState(name ?? '');
+  const reference = workoutReference(history, exercise, date, historyMode);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const suggestions = exerciseSuggestions(exercises, exercise);
@@ -91,6 +96,13 @@ export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave
       </div>
       <p className="field-help">{t('workouts.moreHelp')}</p>
       {!!name && draft.rows.every(isEmptySet) && <p className="field-help">{t('workouts.clearHelp')}</p>}
+      {reference && <p className="field-help workout-reference">
+        <strong>{t(historyMode === 'best' ? 'workouts.historyBest' : 'workouts.historyLast')}</strong>
+        {' · '}{new Date(`${reference.date}T12:00:00`).toLocaleDateString(localeTag())}
+        <br />{reference.sets.map(set => t('workouts.historySet', {
+          reps: set.reps, weight: set.weight.toLocaleString(localeTag(), { maximumFractionDigits: 10 }),
+        })).join(' · ')}
+      </p>}
       {error && <p role="alert" className="form-error">{translateError(error)}</p>}
       <div className="form-actions">
         <button type="button" onClick={onClose} disabled={busy} className="secondary-button">{t('common.cancel')}</button>

@@ -7,8 +7,10 @@ import { isDateKey } from '../lib/dates';
 import { validateWorkoutSets, type DayWorkouts, type WorkoutSet } from '../lib/workouts';
 import { openTracker, trackerTable, synchronizeRecord, validName } from '../lib/sheetbase';
 import { useSyncStore } from './useSyncStore';
+import type { WorkoutHistory } from '../lib/workoutHistory';
 
 interface WorkoutStore {
+  history: WorkoutHistory;
   user: User | null; spreadsheetId: string | null; exercises: string[]; workouts: DayWorkouts;
   loadedDate: string | null; isLoading: boolean; pendingWrites: number; error: string | null;
   localKey: string | null; queuedWrites: number; syncError: string | null; syncedAt: number | null;
@@ -17,7 +19,7 @@ interface WorkoutStore {
   saveExercise: (date: string, name: string, sets: WorkoutSet[]) => Promise<boolean>;
   renameExercise: (date: string, previousName: string, name: string) => Promise<boolean>;
 }
-const emptyState = () => ({ user: null, spreadsheetId: null, exercises: [], workouts: {}, loadedDate: null, isLoading: false, pendingWrites: 0, error: null, localKey: null, queuedWrites: 0, syncError: null, syncedAt: null });
+const emptyState = () => ({ user: null, spreadsheetId: null, exercises: [], workouts: {}, history: {}, loadedDate: null, isLoading: false, pendingWrites: 0, error: null, localKey: null, queuedWrites: 0, syncError: null, syncedAt: null });
 let sessionVersion = 0;
 let viewDate: string | null = null;
 let unsubscribe: (() => void) | undefined;
@@ -28,7 +30,8 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => {
     if (version !== sessionVersion) return;
     const day = snapshot.rows.find(row => row.key === viewDate)?.values ?? {};
     const workouts = Object.fromEntries(snapshot.columns.flatMap(column => day[column.id] ? [[column.header, day[column.id] as WorkoutSet[]]] : []));
-    set({ exercises: snapshot.columns.map(column => column.header), workouts, loadedDate: snapshot.initialized ? viewDate : null, isLoading: false, queuedWrites: snapshot.pending, syncError: snapshot.error?.message ?? null, syncedAt: snapshot.syncedAt });
+    const history = Object.fromEntries(snapshot.rows.map(row => [row.key, Object.fromEntries(snapshot.columns.flatMap(column => row.values[column.id] ? [[column.header, row.values[column.id] as WorkoutSet[]]] : []))]));
+    set({ history, exercises: snapshot.columns.map(column => column.header), workouts, loadedDate: snapshot.initialized ? viewDate : null, isLoading: false, queuedWrites: snapshot.pending, syncError: snapshot.error?.message ?? null, syncedAt: snapshot.syncedAt });
   };
   const attach = (id: string) => {
     const user = get().user; if (!user) return;

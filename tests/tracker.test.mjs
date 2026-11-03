@@ -55,6 +55,15 @@ test('workout day switching is local and weights of zero survive decoding', asyn
   const { store, reads } = await workouts(t); assert.equal(store.getState().workouts.Drep[0].weight, 0);
   await store.getState().loadDay('2026-10-26'); assert.equal(store.getState().workouts.Bench[0].weight, 120); assert.equal(reads.length, 0);
 });
+test('workout history includes other days, tracks renames and clears with the account', async t => {
+  const { store } = await workouts(t);
+  assert.equal(store.getState().history['2026-10-26'].Bench[0].weight, 120);
+  await store.getState().renameExercise(date, 'Bench', 'Tlaky');
+  assert.equal(store.getState().history['2026-10-26'].Tlaky[0].weight, 120);
+  assert.equal(store.getState().history['2026-10-26'].Bench, undefined);
+  store.getState().clearUser();
+  assert.deepEqual(plain(store.getState().history), {});
+});
 test('new exercise and captured first sets share one local transaction', async t => {
   const { store, table } = await workouts(t), sets = [{ reps: 5, weight: 100 }];
   const saving = store.getState().saveExercise(date, 'New', sets); sets[0].weight = 999; assert.equal(await saving, true);

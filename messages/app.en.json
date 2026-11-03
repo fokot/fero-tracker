@@ -237,5 +237,12 @@
   "habits.orderDown": "Move {name} down",
   "habits.orderPosition": "{name}: position {position} of {count}.",
   "habits.orderFailed": "Could not save the order. Try again.",
-  "habits.orderChanged": "The habit list has changed. Close and reopen the order editor."
+  "habits.orderChanged": "The habit list has changed. Close and reopen the order editor.",
+  "workouts.historyTitle": "Exercise history",
+  "workouts.historyHelp": "Show earlier training records when adding or editing sets. Only workouts before the day being edited are included. Maximum means the set with the highest weight, then the most reps. This choice is remembered in this browser.",
+  "workouts.historyShow": "Show below sets",
+  "workouts.historyLast": "Last workout",
+  "workouts.historyBest": "Maximum",
+  "workouts.historyNone": "Do not show",
+  "workouts.historySet": "{reps} × {weight} kg"
 }

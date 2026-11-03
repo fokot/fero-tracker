@@ -15,8 +15,10 @@ import { canSynchronize } from '../lib/sheetbase';
 import { useSyncStore } from '../store/useSyncStore';
 import { LocalStorageSettings } from './LocalStorageSettings';
 import { InstallApp } from './InstallApp';
+import { useWorkoutHistoryPreference } from '../store/useWorkoutHistoryPreference';
 
 export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
+  const { mode: historyMode, setMode: setHistoryMode } = useWorkoutHistoryPreference();
   const user = useHabitStore((state) => state.user)!;
   const habitId = useHabitStore((state) => state.spreadsheetId);
   const workoutId = useWorkoutStore((state) => state.spreadsheetId);
@@ -66,6 +68,17 @@ export function Settings({ onBusy }: { onBusy: (busy: boolean) => void }) {
       <h2 id="language-title">{t('language.label')}</h2><p className="field-help">{t('language.help')}</p><LanguageSwitcher />
     </section>
     <Appearance />
+    <section className="settings-section" aria-labelledby="workout-history-title">
+      <h2 id="workout-history-title">{t('workouts.historyTitle')}</h2>
+      <p className="field-help" id="workout-history-help">{t('workouts.historyHelp')}</p>
+      <label htmlFor="workout-history-mode" className="field-label">{t('workouts.historyShow')}</label>
+      <select id="workout-history-mode" className="form-input" value={historyMode} aria-describedby="workout-history-help"
+        onChange={event => { const value = event.target.value; if (value === 'last' || value === 'best' || value === 'none') setHistoryMode(value); }}>
+        <option value="last">{t('workouts.historyLast')}</option>
+        <option value="best">{t('workouts.historyBest')}</option>
+        <option value="none">{t('workouts.historyNone')}</option>
+      </select>
+    </section>
     <InstallApp />
     <LocalStorageSettings userId={user.id} />
     <section className="settings-section" aria-labelledby="sheets-title">
