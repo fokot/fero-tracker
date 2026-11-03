@@ -68,7 +68,11 @@ export function WorkoutEditor({ date, name, initialSets, exercises, busy, onSave
             }} placeholder={t('workouts.placeholder')} className="form-input" />
           {showSuggestions && <ul id={suggestionId} role="listbox" aria-label={t('workouts.name')} className="exercise-suggestions">
             {suggestions.map((item, index) => <li key={item} id={`${suggestionId}-${index}`} role="option" aria-selected={index === activeSuggestion}
-              className={index === activeSuggestion ? 'is-active' : ''} onPointerDown={event => event.preventDefault()}
+              className={index === activeSuggestion ? 'is-active' : ''} onPointerDown={event => {
+                if (!event.isPrimary || event.button !== 0) return;
+                event.preventDefault();
+                selectExercise(item);
+              }}
               onClick={() => selectExercise(item)}>{item}</li>)}
           </ul>}
         </div>
