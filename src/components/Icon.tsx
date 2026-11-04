@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
-type IconName = 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash' | 'settings' | 'sun' | 'moon' | 'system' | 'sheet' | 'up' | 'down' | 'grip' | 'reorder';
+type IconName = 'chart' | 'habits' | 'workouts' | 'plus' | 'check' | 'refresh' | 'external' | 'logout' | 'left' | 'right' | 'close' | 'today' | 'edit' | 'trash' | 'settings' | 'sun' | 'moon' | 'system' | 'sheet' | 'up' | 'down' | 'grip' | 'reorder';
 const paths: Record<IconName, ReactNode> = {
+  chart: <><path d="M4 3v17h17M7 14l4-5 4 3 6-8" /></>,
   up: <path d="m6 14 6-6 6 6" />,
   down: <path d="m6 10 6 6 6-6" />,
   grip: <><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" strokeWidth="3" /></>,

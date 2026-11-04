@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { dateKey, isDateKey } from '../lib/dates';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { useWorkoutHistoryPreference } from '../store/useWorkoutHistoryPreference';
+import { WorkoutCharts } from './WorkoutCharts';
 import { WorkoutEditor } from './WorkoutEditor';
 import { Icon } from './Icon';
 import { EditableName } from './EditableName';
@@ -15,6 +16,7 @@ export function Workouts() {
   const historyMode = useWorkoutHistoryPreference(state => state.mode);
   const history = useWorkoutStore(state => state.history);
   const [date, setDate] = useState(() => loadedDate ?? dateKey(new Date()));
+  const [showCharts, setShowCharts] = useState(false);
   const [editor, setEditor] = useState<{ name?: string } | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
   const ready = loadedDate === date && !isLoading;
@@ -28,11 +30,14 @@ export function Workouts() {
   const entries = ready ? Object.entries(workouts) : [];
   const setCount = entries.reduce((total, [, sets]) => total + sets.length, 0);
 
+  if (showCharts) return <WorkoutCharts history={history} exercises={exercises} onBack={() => setShowCharts(false)} />;
+
   return <main id="main-content" className="workouts-page">
     <div className="page-heading">
       <div><h1>{t('common.workouts')}</h1><p className="page-description">{t('workouts.description')}</p></div>
       <button type="button" className="primary-button heading-action" disabled={!ready || busy} onClick={() => setEditor({})} aria-label={t('workouts.add')}><Icon name="plus" size={19} /><span>{t('workouts.add')}</span></button>
     </div>
+    <div className="habit-order-toolbar"><button type="button" className="text-button habit-order-trigger" disabled={!ready || busy} onClick={() => setShowCharts(true)}><Icon name="chart" size={17} />{t('charts.title')}</button></div>
     <section aria-label={t('workouts.dayLabel')} className="workout-day">
       <div className="day-label"><label htmlFor="workout-date">{t('workouts.day')}</label><button type="button" disabled={busy} onClick={() => setDate(dateKey(new Date()))} className="today-button" title={t('common.goToday')}><Icon name="today" size={17} />{t('common.today')}</button></div>
       <div className="day-picker">
