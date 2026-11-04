@@ -1,7 +1,7 @@
 import { translateError, plural, t } from '../i18n/messages';
 import { localeTag } from '../i18n/locale';
 import { SyncStatus } from './SyncStatus';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { dateKey, isDateKey } from '../lib/dates';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { useWorkoutHistoryPreference } from '../store/useWorkoutHistoryPreference';
@@ -19,6 +19,7 @@ export function Workouts() {
   const [showCharts, setShowCharts] = useState(false);
   const [editor, setEditor] = useState<{ name?: string } | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
   const ready = loadedDate === date && !isLoading;
   const busy = pendingWrites > 0;
   useEffect(() => { if (user) void loadDay(date); }, [user, date, loadDay]);
@@ -32,7 +33,28 @@ export function Workouts() {
 
   if (showCharts) return <WorkoutCharts history={history} exercises={exercises} onBack={() => setShowCharts(false)} />;
 
-  return <main id="main-content" className="workouts-page">
+  return <main id="main-content" className="workouts-page"
+    onTouchStart={(event) => {
+      swipe.current = null;
+      if (busy || editor || managing || event.touches.length !== 1 ||
+        (event.target as Element).closest('button, a, input, select, textarea, [role="dialog"], [contenteditable]')) return;
+      const touch = event.touches[0];
+      swipe.current = { x: touch.clientX, y: touch.clientY };
+    }}
+    onTouchMove={(event) => {
+      const start = swipe.current;
+      if (!start) return;
+      if (event.touches.length !== 1 || Math.abs(event.touches[0].clientY - start.y) > 35) swipe.current = null;
+    }}
+    onTouchCancel={() => { swipe.current = null; }}
+    onTouchEnd={(event) => {
+      const start = swipe.current;
+      swipe.current = null;
+      if (!start || busy || editor || managing || event.touches.length || !event.changedTouches.length) return;
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+      if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 2) moveDay(dx < 0 ? 1 : -1);
+    }}>
     <div className="page-heading">
       <div><h1>{t('common.workouts')}</h1><p className="page-description">{t('workouts.description')}</p></div>
       <button type="button" className="primary-button heading-action" disabled={!ready || busy} onClick={() => setEditor({})} aria-label={t('workouts.add')}><Icon name="plus" size={19} /><span>{t('workouts.add')}</span></button>

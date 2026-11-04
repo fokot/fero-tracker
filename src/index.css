@@ -359,3 +359,6 @@ button, a, input { scroll-margin-bottom: 100px; }
   .chart-summary > div { padding: 16px 12px; }
   .chart-panel { padding: 20px 12px 14px; }
 }
+
+/* Keep vertical scrolling and pinch zoom available while navigating workout days. */
+.workouts-page:not(.workout-charts) { touch-action: pan-y pinch-zoom; }
